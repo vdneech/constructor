@@ -68,7 +68,6 @@ Network Trash Folder
 Temporary Items
 .apdisk
 
-
 ### Linux ###
 *~
 
@@ -112,8 +111,10 @@ $RECYCLE.BIN/
 *.css.map
 
 
-### Less ###
-*.css
+public/
+src/
+package*.json
+
 
 
 ### grunt ###
@@ -198,7 +199,7 @@ coverage.xml
 .pytest_cache/
 cover/
 create.py
-
+tests/
 # Translations
 *.mo
 *.pot
@@ -331,6 +332,9 @@ dmypy.json
 # pytype static type analyzer
 .pytype/
 
+.idea
+
+
 # Cython debug symbols
 cython_debug/
 
@@ -339,7 +343,7 @@ cython_debug/
 #   be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
 #   and can be added to the global gitignore or merged into this file.  For a more nuclear
 #   option (not recommended) you can uncomment the following to ignore the entire idea folder.
-# .idea/
+ .idea/
 
 # Abstra
 #   Abstra is an AI-powered process automation framework.

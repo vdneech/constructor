@@ -25,11 +25,6 @@ class GoodImageSerializer(serializers.ModelSerializer):
                 )
         return attrs
 
-# class GoodBaseSerializer(serializers.ModelSerializer):
-#
-#     class Meta:
-#         model = Good
-#         fields = ['id', 'title']
 
 class GoodSerializer(serializers.ModelSerializer):
 

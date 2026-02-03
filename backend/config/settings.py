@@ -13,6 +13,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 CSRF_TRUSTED_ORIGINS = [
     "https://guest-seasons.tech",
     "https://www.guest-seasons.tech",
+    "http://localhost:3000"
 ]
 
 # ==================== 2. КОНФИГИ СТОРОННИХ ЗАВИСИМОСТЕЙ ====================
@@ -47,7 +48,7 @@ if os.getenv('PYTEST_RUNNING'):
 
 REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 20,
+    'PAGE_SIZE': 42,
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
@@ -89,7 +90,7 @@ DEBUG = False
 ALLOWED_HOSTS = [
     'guest-seasons.tech',
     'www.guest-seasons.tech',
-
+    'localhost'
 ]
 
 AUTH_USER_MODEL = 'users.User'

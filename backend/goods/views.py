@@ -5,14 +5,18 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
 from bot.management.commands.runbot import logger
+from config.utils import UploadImageMixin
 from goods.models import Good, GoodImage
 from goods.serializers import GoodSerializer, GoodImageSerializer
 import logging
 
 logger = logging.getLogger('gfs')
 
-class GoodViewSet(viewsets.ModelViewSet):
+class GoodViewSet(UploadImageMixin, viewsets.ModelViewSet):
 
+
+    image_serializer_class = GoodImageSerializer
+    image_relation_field = 'good'
 
     serializer_class = GoodSerializer
     pagination_class = PageNumberPagination

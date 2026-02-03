@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from django.utils import timezone
 from rest_framework.views import APIView
 
+from config.utils import UploadImageMixin
 from .tasks import send_newsletter_task
 
 from newsletters.models import Newsletter
@@ -15,16 +16,16 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class StandardResultsSetPagination(PageNumberPagination):
-    page_size = 20
-    page_size_query_param = 'page_size'
-    max_page_size = 100
+
+class NewsletterViewSet(UploadImageMixin, viewsets.ModelViewSet):
 
 
-class NewsletterViewSet(viewsets.ModelViewSet):
+    image_serializer_class = NewsletterImageSerializer
+    image_relation_field = 'newsletter'
+
     serializer_class = NewsletterSerializer
     queryset = Newsletter.objects.all()
-    pagination_class = StandardResultsSetPagination
+
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
@@ -59,15 +60,15 @@ class NewsletterViewSet(viewsets.ModelViewSet):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=True, methods=['post'], url_path='upload-image')
-    def upload_image(self, request, pk=None):
-        serializer = NewsletterImageSerializer(data=request.data)
-        newsletter = self.get_object()
-        if serializer.is_valid():
-
-            serializer.save(newsletter=newsletter)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    # @action(detail=True, methods=['post'], url_path='upload-image')
+    # def upload_image(self, request, pk=None):
+    #     serializer = NewsletterImageSerializer(data=request.data)
+    #     newsletter = self.get_object()
+    #     if serializer.is_valid():
+    #
+    #         serializer.save(newsletter=newsletter)
+    #         return Response(serializer.data, status=status.HTTP_201_CREATED)
+    #     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=['get'], url_path='progress')
     def progress(self, request):
