@@ -156,7 +156,6 @@ __pycache__/
 
 # Distribution / packaging
 .Python
-build/
 develop-eggs/
 dist/
 downloads/
@@ -198,12 +197,16 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
+create.py
 
 # Translations
 *.mo
 *.pot
 
 # Django stuff:
+backend/logs
+backend/pytest.ini
+
 *.log
 local_settings.py
 db.sqlite3
@@ -283,6 +286,7 @@ celerybeat.pid
 *.rdb
 *.aof
 *.pid
+*.db
 
 # RabbitMQ
 mnesia/
