@@ -67,22 +67,24 @@ export default function HTMLTextarea({
     }, 0);
   };
 
-  const sharedStyles = {
-    padding: isMobile ? '16px' : '20px',
-    fontSize: isMobile ? '15px' : '16px',
-    lineHeight: '1.6',
-    fontFamily: "'Montserrat', sans-serif",
-    fontWeight: 500,
-    width: '100%',
-    boxSizing: 'border-box',
-    whiteSpace: 'pre-wrap',
-    wordWrap: 'break-word',
-    wordBreak: 'break-all',
-    border: 'none',
-    margin: 0,
-    outline: 'none',
-    WebkitFontSmoothing: 'antialiased',
-    MozOsxFontSmoothing: 'grayscale',
+    const sharedStyles = {
+      padding: isMobile ? '16px' : '20px',
+      fontSize: isMobile ? '15px' : '16px',
+      lineHeight: '1.6',
+      fontFamily: "'Montserrat', sans-serif",
+      fontWeight: 500,
+      width: '100%',
+      boxSizing: 'border-box',
+
+      whiteSpace: 'pre-wrap',
+      wordWrap: 'break-word',
+      wordBreak: 'normal',
+
+      border: 'none',
+      margin: 0,
+      outline: 'none',
+      WebkitFontSmoothing: 'antialiased',
+      MozOsxFontSmoothing: 'grayscale',
   };
 
   const toolbarTags = [

@@ -1,16 +1,24 @@
 // public/service-worker.js
-const CACHE_NAME = 'gfs-admin-v1';
-const urlsToCache = [
+
+const CACHE_NAME = 'gfs-admin-v2'; // ← Увеличьте версию для сброса старого кеша
+const STATIC_ASSETS = [
   '/',
   '/index.html',
+  '/static/css/main.css',
+  '/static/js/main.js',
+  '/logo 512x512.png',
+  '/icon-192x192.png',
+  '/icon-512x512.png',
 ];
 
 // Установка Service Worker
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('Service Worker: Cache opened');
-      return cache.addAll(urlsToCache);
+      console.log('Service Worker: Кеширование статических файлов');
+      return cache.addAll(STATIC_ASSETS).catch(err => {
+        console.warn('Ошибка кеширования:', err);
+      });
     })
   );
   self.skipWaiting();
@@ -23,7 +31,7 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
-            console.log('Service Worker: Clearing old cache');
+            console.log('Service Worker: Удаление старого кеша', cacheName);
             return caches.delete(cacheName);
           }
         })
@@ -33,27 +41,55 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Network-first стратегия (всегда актуальные данные по ТЗ)
+// Network-first для API, cache-first для статики
 self.addEventListener('fetch', (event) => {
+  const { request } = event;
+  const url = new URL(request.url);
+
+  // API запросы — ВСЕГДА только из сети, НЕ кешируем
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(
+      fetch(request).catch(() => {
+        return new Response(JSON.stringify({ error: 'Нет соединения' }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      })
+    );
+    return;
+  }
+
+  // Для остальных файлов (HTML, JS, CSS, изображения) — cache-first
   event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        // Не кешируем API запросы
-        if (event.request.url.includes('/api/')) {
+    caches.match(request).then((cachedResponse) => {
+      if (cachedResponse) {
+        // Асинхронно обновляем кеш в фоне
+        fetch(request).then((response) => {
+          if (response && response.status === 200) {
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(request, response.clone());
+            });
+          }
+        });
+        return cachedResponse;
+      }
+
+      // Если в кеше нет — загружаем из сети
+      return fetch(request).then((response) => {
+        if (!response || response.status !== 200 || response.type === 'error') {
           return response;
         }
-        
-        // Клонируем ответ для кеша
-        const responseToCache = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache);
-        });
-        
+
+        // Кешируем только статику (не HTML страницы с данными)
+        if (request.method === 'GET' && !url.pathname.includes('/api/')) {
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(request, responseToCache);
+          });
+        }
+
         return response;
-      })
-      .catch(() => {
-        // Fallback на кеш только если сеть недоступна
-        return caches.match(event.request);
-      })
+      });
+    })
   );
 });

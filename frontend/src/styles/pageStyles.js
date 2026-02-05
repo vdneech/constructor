@@ -9,7 +9,7 @@ export const pageStyles = {
     minHeight: '100vh',
     background: colors.background,
     fontFamily: typography.fontFamily,
-    padding: `100px ${spacing.lg}px`,
+    padding: `100px ${spacing.lg}px 0`,
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'flex-start',
@@ -19,6 +19,7 @@ export const pageStyles = {
   container: {
     maxWidth: '120vh',
     width: '100%',
+    marginBottom: 20
   },
 
   // ========== КАРТОЧКИ ==========
@@ -61,6 +62,7 @@ export const pageStyles = {
     display: 'grid',
     gridTemplateColumns: '1fr 1fr',
     gap: spacing.md,
+    marginBottom: spacing.md,
   },
 
   fieldRowMobile: {

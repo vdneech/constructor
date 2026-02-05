@@ -7,7 +7,7 @@ export const colors = {
   background: '#FAFAFA',
   primary: '#1C1C1C',
   primaryHover: '#0F0F0F',
-  primaryDark: '#B91C1C', // Для danger hover
+  primaryDark: '#434343', // Для danger hover
   accent: '#F8F7E2',
   white: '#FFFFFF',
 

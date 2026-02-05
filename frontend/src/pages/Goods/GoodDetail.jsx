@@ -14,7 +14,10 @@ import {
   PageHeader,
   ErrorPage
 } from '../../components/common';
-import { useIsMobile } from '../../hooks';
+
+
+import PageLayout from '../../components/PageLayout';
+import { useIsMobile, usePageData } from '../../hooks';
 import { parseApiError } from '../../utils';
 import { pageStyles } from '../../styles/pageStyles';
 import { colors, spacing, borderRadius, shadows } from '../../styles/theme';
@@ -25,10 +28,32 @@ export default function GoodDetail() {
   const isMobile = useIsMobile();
   const fileInputRef = useRef(null);
 
+
+  const fetchGood = useCallback(() => goodsApi.retrieve(id), [id]);
   const [good, setGood] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { data, loading, error, retry } = usePageData(fetchGood, [id]);
+
+  useEffect(() => {
+    if (data) {
+      setGood(data);
+      setForm({
+        title: data.title || '',
+        label: data.label || '',
+        price: data.price ? String(data.price) : '',
+        description: data.description || '',
+        quantity: data.quantity || 0,
+        available: data.available ?? true
+      });
+      setImages(data.images?.map(img => ({
+        id: img.id, preview: img.image, is_invoice: img.is_invoice
+      })) || []);
+    }
+  }, [data]);
+
+
+
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
+
   const [form, setForm] = useState({
     title: '', label: '', price: '', description: '', quantity: 0, available: true
   });
@@ -53,31 +78,9 @@ export default function GoodDetail() {
     }
   };
 
-  const loadGood = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await goodsApi.retrieve(id);
-      setGood(data);
-      setForm({
-        title: data.title || '',
-        label: data.label || '',
-        price: data.price ? String(data.price) : '',
-        description: data.description || '',
-        quantity: data.quantity || 0,
-        available: data.available ?? true
-      });
-      setImages(data.images?.map(img => ({
-        id: img.id, preview: img.image, is_invoice: img.is_invoice
-      })) || []);
-    } catch (e) {
-      setError(parseApiError(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
 
-  useEffect(() => { loadGood(); }, [loadGood]);
+
+
 
   const handleImagesChange = async (e) => {
     const files = Array.from(e.target.files || []);
@@ -159,200 +162,193 @@ export default function GoodDetail() {
     }
   };
 
-  if (error) return <ErrorPage code="500" message={error} />;
 
-  if (loading) {
-    return (
-      <div style={styles.center}>
-        <Spinner size={40} />
-      </div>
-    );
-  }
 
   return (
-    <div style={pageStyles.page}>
-      <div style={pageStyles.container}>
-        <button onClick={() => navigate('/goods')} style={styles.backBtn}>
-          ← Назад
-        </button>
+    <PageLayout loading={loading} error={error} onRetry={retry}>
+      <div style={pageStyles.page}>
+        <div style={pageStyles.container}>
+          <button onClick={() => navigate('/goods')} style={styles.backBtn}>
+            ← Назад к списку
+          </button>
 
-        <PageHeader
-          title={form.title || 'Товар'}
-          subtitle="Редактирование товара. Фото с меткой будет отображаться в Telegram чеке."
-          isMobile={isMobile}
-        />
-
-        <div style={dynamicStyles.card}>
-          <div style={dynamicStyles.topFields}>
-            <Input
-              label="Название"
-              required
-              value={form.title}
-              error={errors.title?.[0]}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-              placeholder="Название товара"
-              hint="Это название будет видно в Telegram чеке"
-            />
-
-            <Input
-              label="Лейбл"
-              required
-              value={form.label}
-              error={errors.label?.[0]}
-              onChange={(e) => setForm({ ...form, label: e.target.value })}
-              placeholder="Label"
-              hint="Внутреннее название"
-            />
-          </div>
-
-          <HTMLTextarea
-            htmlTags={false}
-            label="Описание"
-            required
-            value={form.description}
-            error={errors.description?.[0]}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-            placeholder="Описание товара"
-            hint="Подробнее о товаре"
+          <PageHeader
+            title={form.title || 'Товар'}
+            subtitle="Редактирование товара. Фото с меткой будет отображаться в Telegram чеке."
+            isMobile={isMobile}
           />
 
-          <div style={styles.divider} />
+          <div style={dynamicStyles.card}>
+            <div style={dynamicStyles.topFields}>
+              <Input
+                label="Название"
+                required
+                value={form.title}
+                error={errors.title?.[0]}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                placeholder="Название товара"
+                hint="Это название будет видно в Telegram чеке"
+              />
 
-          <div style={{ marginBottom: spacing.xl }}>
-            <div style={styles.sectionHeader}>
-              <h3 style={styles.sectionTitle}>Фотографии</h3>
-              <span style={styles.photoCount}>{images.length} / 3</span>
+              <Input
+                label="Название позиции"
+                required
+                value={form.label}
+                error={errors.label?.[0]}
+                onChange={(e) => setForm({ ...form, label: e.target.value })}
+                placeholder="Label"
+                hint="Небольшое описание товара, будет отображаться в чеке"
+              />
             </div>
-            <input
-              type="file"
-              ref={fileInputRef}
-              hidden
-              accept="image/*"
-              multiple
-              onChange={handleImagesChange}
+
+            <HTMLTextarea
+              label="Описание"
+              required
+              value={form.description}
+              error={errors.description?.[0]}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              placeholder="Описание товара"
+              hint="Будет отправлено в сообщении перед чеком"
             />
 
-            <div style={dynamicStyles.photoGrid}>
-              {images.map((img) => (
-                <div
-                  key={img.id}
-                  onClick={() => handleSetInvoice(img.id)}
-                  style={{
-                    ...styles.photoCard,
-                    borderColor: img.is_invoice ? colors.primary : colors.gray200
-                  }}
-                >
-                  <img src={img.preview} alt="" style={styles.img} />
-                  {img.is_invoice && (
-                    <div style={styles.invoiceBadge}>ИНВОЙС</div>
-                  )}
-                  <button
-                    onClick={(e) => handleDeleteImage(e, img.id)}
-                    style={styles.deleteBtn}
+            <div style={styles.divider} />
+
+            <div style={{ marginBottom: spacing.xl }}>
+              <div style={styles.sectionHeader}>
+                <h3 style={styles.sectionTitle}>Фотографии</h3>
+                <span style={styles.photoCount}>{images.length} / 3</span>
+              </div>
+              <input
+                type="file"
+                ref={fileInputRef}
+                hidden
+                accept="image/*"
+                multiple
+                onChange={handleImagesChange}
+              />
+
+              <div style={dynamicStyles.photoGrid}>
+                {images.map((img) => (
+                  <div
+                    key={img.id}
+                    onClick={() => handleSetInvoice(img.id)}
+                    style={{
+                      ...styles.photoCard,
+                      borderColor: img.is_invoice ? colors.primary : colors.gray200
+                    }}
                   >
-                    <TrashIcon />
-                  </button>
-                </div>
-              ))}
-
-              {images.length === 0 && (
-                <div
-                  onClick={() => !saving && fileInputRef.current.click()}
-                  style={{
-                    ...styles.emptyPhotoCard,
-                    transform: isPhotoHovered ? 'translateY(-4px)' : 'translateY(0px)',
-                    boxShadow: isPhotoHovered ? 'rgba(0, 0, 0, 0.03) 0px 10px 40px' : 'none',
-                  }}
-                  onMouseEnter={() => setIsPhotoHovered(true)}
-                  onMouseLeave={() => setIsPhotoHovered(false)}
-                >
-                  <div style={styles.emptyIconBox}>
-                    {saving ? <Spinner size={24} /> : '+'}
+                    <img src={img.preview} alt="" style={styles.img} />
+                    {img.is_invoice && (
+                      <div style={styles.invoiceBadge}>ИНВОЙС</div>
+                    )}
+                    <button
+                      onClick={(e) => handleDeleteImage(e, img.id)}
+                      style={styles.deleteBtn}
+                    >
+                      <TrashIcon />
+                    </button>
                   </div>
-                  <h3 style={styles.emptyTitle}>Добавить фото</h3>
-                  <p style={styles.emptySubtext}>3-х изображений максимум</p>
-                </div>
-              )}
+                ))}
 
-              {images.length > 0 && images.length < 3 && (
-                <div
-                  onClick={() => !saving && fileInputRef.current.click()}
-                  style={styles.smallUploadCard}
-                >
-                  <span style={{ fontSize: 24, color: colors.gray400 }}>+</span>
-                </div>
-              )}
+                {images.length === 0 && (
+                  <div
+                    onClick={() => !saving && fileInputRef.current.click()}
+                    style={{
+                      ...styles.emptyPhotoCard,
+                      transform: isPhotoHovered ? 'translateY(-4px)' : 'translateY(0px)',
+                      boxShadow: isPhotoHovered ? 'rgba(0, 0, 0, 0.03) 0px 10px 40px' : 'none',
+                    }}
+                    onMouseEnter={() => setIsPhotoHovered(true)}
+                    onMouseLeave={() => setIsPhotoHovered(false)}
+                  >
+                    <div style={styles.emptyIconBox}>
+                      {saving ? <Spinner size={24} /> : '+'}
+                    </div>
+                    <h3 style={styles.emptyTitle}>Добавить фото</h3>
+                    <p style={styles.emptySubtext}>3-х изображений максимум</p>
+                  </div>
+                )}
+
+                {images.length > 0 && images.length < 3 && (
+                  <div
+                    onClick={() => !saving && fileInputRef.current.click()}
+                    style={styles.smallUploadCard}
+                  >
+                    <span style={{ fontSize: 24, color: colors.gray400 }}>+</span>
+                  </div>
+                )}
+              </div>
+
+              <p style={styles.photoHint}>
+                Кликните на фото, чтобы отметить его как главное. Главное фото отображается в чеке.
+              </p>
             </div>
 
-            <p style={styles.photoHint}>
-              Кликните на фото, чтобы отметить его как главное. Главное фото отображается в чеке.
-            </p>
-          </div>
+            <div style={styles.divider} />
 
-          <div style={styles.divider} />
+            <div style={dynamicStyles.topFields}>
+              <Input
+                label="Цена, ₽"
+                type="number"
+                required
+                hint="Минимум: 69.00, Максимум: 15000.00"
+                value={form.price}
+                error={errors.price?.[0]}
+                onChange={(e) => setForm({ ...form, price: e.target.value })}
+              />
 
-          <div style={dynamicStyles.topFields}>
-            <Input
-              label="Цена, ₽"
-              type="number"
-              required
-              hint="Минимум: 69.00, Максимум: 15000.00"
-              value={form.price}
-              error={errors.price?.[0]}
-              onChange={(e) => setForm({ ...form, price: e.target.value })}
+              <Input
+                label="Количество"
+                type="number"
+                required
+                hint="Доступные единицы товара"
+                value={form.quantity}
+                error={errors.quantity?.[0]}
+                onChange={(e) => setForm({ ...form, quantity: e.target.value })}
+              />
+            </div>
+
+            <Checkbox
+              checked={form.available}
+              onChange={() => setForm((prev) => ({ ...prev, available: !prev.available }))}
+              title="Товар доступен для продажи"
+              description="Неактивные товары не отображаются в боте"
             />
 
-            <Input
-              label="Количество"
-              type="number"
-              required
-              hint="Доступные единицы товара"
-              value={form.quantity}
-              error={errors.quantity?.[0]}
-              onChange={(e) => setForm({ ...form, quantity: e.target.value })}
-            />
+            <div style={styles.actions}>
+              <Button variant="primary" onClick={handleSave} loading={saving} fullWidth>
+                Сохранить изменения
+              </Button>
+
+              <Button variant="danger" onClick={() => setConfirmDelete(true)} fullWidth>
+                Удалить товар
+              </Button>
+            </div>
           </div>
 
-          <Checkbox
-            checked={form.available}
-            onChange={() => setForm((prev) => ({ ...prev, available: !prev.available }))}
-            title="Товар доступен для продажи"
-            description="Неактивные товары не отображаются в боте"
+          {/* Delete Confirmation Modal */}
+          <ConfirmModal
+            open={confirmDelete}
+            title="Удаление товара"
+            message="Вы уверены, что хотите удалить этот товар?"
+            description="Это действие нельзя будет отменить."
+            confirmText="Удалить"
+            cancelText="Отмена"
+            loading={saving}
+            onConfirm={handleDeleteConfirm}
+            onClose={() => setConfirmDelete(false)}
           />
 
-          <div style={styles.actions}>
-            <Button variant="primary" onClick={handleSave} loading={saving} fullWidth>
-              Сохранить изменения
-            </Button>
-
-            <Button variant="danger" onClick={() => setConfirmDelete(true)} fullWidth>
-              Удалить товар
-            </Button>
-          </div>
+          {/* Notice Modal */}
+          <NoticeModal
+            open={notice.open}
+            type={notice.type}
+            text={notice.text}
+            onClose={() => setNotice({ ...notice, open: false })}
+          />
         </div>
-
-        {/* Delete Confirmation Modal */}
-        <ConfirmModal
-          open={confirmDelete}
-          title="Удаление товара"
-          message="Вы уверены, что хотите удалить этот товар?"
-          description="Это действие нельзя будет отменить."
-          confirmText="Удалить"
-          cancelText="Отмена"
-          loading={saving}
-          onConfirm={handleDeleteConfirm}
-          onClose={() => setConfirmDelete(false)}
-        />
-
-        {/* Notice Modal */}
-        <NoticeModal
-          open={notice.open}
-          type={notice.type}
-          text={notice.text}
-          onClose={() => setNotice({ ...notice, open: false })}
-        />
       </div>
-    </div>
+    </PageLayout>
   );
 }
 

@@ -8,19 +8,22 @@ import {
   PageHeader,
   NoticeModal,
   Spinner,
-  ErrorPage // Внедрено
+  ErrorPage
 } from '../../components/common';
-import { useIsMobile } from '../../hooks';
+import { useIsMobile, usePageData } from '../../hooks';
 import { parseApiError } from '../../utils';
 import { pageStyles } from '../../styles/pageStyles';
 import { colors, spacing, borderRadius, shadows } from '../../styles/theme';
+import PageLayout from '../../components/PageLayout';
 
-const getBaseServerUrl = () => {
-  const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
-  return apiUrl.replace(/\/+$/, '').replace(/\/api$/, '');
+
+// Хелпер для получения полного URL медиа-файла напрямую от корня API
+const getMediaUrl = (path) => {
+  if (!path) return null;
+  if (path.startsWith('http')) return path;
+  // Если путь начинается с /media, браузер сам добавит текущий домен
+  return path;
 };
-
-const SERVER_URL = getBaseServerUrl();
 
 export default function BotConfig() {
   const isMobile = useIsMobile();
@@ -39,58 +42,50 @@ export default function BotConfig() {
     end_of_registration: '',
     closed_registrations_message: '',
     already_registered_message: '',
+    ceo_message: '',
+    format_message: ''
   });
 
   const [errors, setErrors] = useState({});
   const [preview, setPreview] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(null); // Для ErrorPage
+
+
   const [saving, setSaving] = useState(false);
   const [isPhotoHovered, setIsPhotoHovered] = useState(false);
   const [notice, setNotice] = useState({ open: false, type: 'success', text: '' });
 
   const parseDateForInput = (val) => (val ? val.split('T')[0] : '');
 
-  const getFullImageUrl = (path) => {
-    if (!path) return null;
-    if (path.startsWith('http')) return path;
-    const cleanPath = path.replace(/^\/?api\//, '/').replace(/\/+/g, '/');
-    return `${SERVER_URL}${cleanPath.startsWith('/') ? '' : '/'}${cleanPath}`;
-  };
+  const { data, loading, error, retry } = usePageData(
+  () => botConfigApi.get(),
+  []
+);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const data = await botConfigApi.get();
-        const cleanedData = {};
-        Object.keys(data).forEach(key => {
-          const val = data[key];
-          cleanedData[key] = typeof val === 'string' ? val.trim() : val;
-        });
+useEffect(() => {
+  if (data) {
+    const cleanedData = {};
+    Object.keys(data).forEach(key => {
+      const val = data[key];
+      cleanedData[key] = typeof val === 'string' ? val.trim() : val;
+    });
 
-        setConfig({
-          ...cleanedData,
-          end_of_registration: parseDateForInput(data.end_of_registration)
-        });
+    setConfig({
+      ...cleanedData,
+      end_of_registration: parseDateForInput(data.end_of_registration)
+    });
 
-        if (data.invoice_image) {
-          setPreview(getFullImageUrl(data.invoice_image));
-        }
-      } catch (err) {
-        setLoadError(parseApiError(err));
-      } finally {
-        setLoading(false);
-      }
+    if (data.invoice_image) {
+      setPreview(getMediaUrl(data.invoice_image));
     }
-    load();
-  }, []);
+  }
+}, [data]);
 
   const handleChange = (field) => (e) => {
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: null }));
     }
-    const value = e.target.type === 'number' ? 
-      (e.target.value === '' ? '' : Number(e.target.value)) : 
+    const value = e.target.type === 'number' ?
+      (e.target.value === '' ? '' : Number(e.target.value)) :
       e.target.value;
     setConfig(prev => ({ ...prev, [field]: value }));
   };
@@ -98,8 +93,8 @@ export default function BotConfig() {
   const validate = () => {
     const newErrors = {};
     const requiredFields = [
-      'invoice_label', 'invoice_title', 'invoice_description', 
-      'max_users', 'price', 'start_message', 
+      'invoice_label', 'invoice_title', 'invoice_description',
+      'max_users', 'price', 'start_message',
       'merchant_message', 'closed_registrations_message', 'already_registered_message'
     ];
 
@@ -129,6 +124,7 @@ export default function BotConfig() {
       }
       setConfig(prev => ({ ...prev, invoice_image: file }));
       setPreview(URL.createObjectURL(file));
+      setErrors(prev => ({ ...prev, invoice_image: null }));
     }
   };
 
@@ -156,16 +152,29 @@ export default function BotConfig() {
           formData.append(key, config[key] || '');
         }
       });
+
       const updatedData = await botConfigApi.partialUpdate(formData);
+
       setConfig(prev => ({
         ...prev,
         ...updatedData,
         end_of_registration: parseDateForInput(updatedData.end_of_registration)
       }));
-      if (updatedData.invoice_image) setPreview(getFullImageUrl(updatedData.invoice_image));
+
+      if (updatedData.invoice_image) {
+        setPreview(getMediaUrl(updatedData.invoice_image));
+      }
+
       setNotice({ open: true, type: 'success', text: 'Конфигурация успешно сохранена' });
     } catch (err) {
-      setNotice({ open: true, type: 'error', text: parseApiError(err) });
+      const apiErrors = err.response?.data || {};
+      setErrors(apiErrors);
+      // Выводим ошибку от сериализатора (например, про соотношение сторон 4:5)
+      setNotice({
+        open: true,
+        type: 'error',
+        text: apiErrors.invoice_image?.[0] || parseApiError(err)
+      });
     } finally {
       setSaving(false);
     }
@@ -189,174 +198,195 @@ export default function BotConfig() {
     }
   };
 
-  if (loadError) return <ErrorPage code="500"/>;
-  if (loading) return <div style={styles.center}><Spinner size={40} /></div>;
+
 
   return (
-    <div style={pageStyles.page}>
-      <div style={pageStyles.container}>
-        <PageHeader
-          title="Настройки бота"
-          subtitle="Конфигурация платежного чека, лимитов и системных сообщений"
-          isMobile={isMobile}
-          actions={
-            <Button variant="primary" onClick={() => navigate('/bot/registration')} fullWidth>
-              Шаги регистрации
-            </Button>
-          }
-        />
+    <PageLayout loading={loading} error={error} onRetry={retry}>
+      <div style={pageStyles.page}>
+        <div style={pageStyles.container}>
+          <PageHeader
+            title="Настройки бота"
+            subtitle="Конфигурация платежного чека, лимитов и системных сообщений"
+            isMobile={isMobile}
+            actions={
+              <Button variant="primary" onClick={() => navigate('/bot/registration')} fullWidth>
+                Шаги регистрации
+              </Button>
+            }
+          />
 
-        <div style={dynamicStyles.card}>
-          <form onSubmit={handleSubmit}>
-            
-            <div style={dynamicStyles.invoiceSection}>
-              <div>
-                <div style={styles.sectionHeader}>
-                  <h3 style={styles.sectionTitle}>Фото чека</h3>
+          <div style={dynamicStyles.card}>
+            <form onSubmit={handleSubmit}>
+
+              <div style={dynamicStyles.invoiceSection}>
+                <div>
+                  <div style={styles.sectionHeader}>
+                    <h3 style={styles.sectionTitle}>Фото чека</h3>
+                  </div>
+                  <input type="file" ref={fileInputRef} hidden accept="image/*" onChange={handleFileSelect} />
+                  <div style={styles.photoContainer}>
+                    {preview ? (
+                      <div onClick={() => fileInputRef.current.click()} style={styles.photoCard}>
+                        <img src={preview} alt="Invoice" style={styles.img} />
+                        <button type="button" onClick={handleDeletePhoto} style={styles.deleteBtn}>
+                          <TrashIcon />
+                        </button>
+                      </div>
+                    ) : (
+                      <div
+                        onClick={() => fileInputRef.current.click()}
+                        style={{
+                          ...styles.emptyPhotoCard,
+                          transform: isPhotoHovered ? 'translateY(-4px)' : 'translateY(0px)',
+                          boxShadow: isPhotoHovered ? shadows.sm : 'none'
+                        }}
+                        onMouseEnter={() => setIsPhotoHovered(true)}
+                        onMouseLeave={() => setIsPhotoHovered(false)}
+                      >
+                        <div style={styles.emptyIconBox}>+</div>
+                        <h3 style={styles.emptyTitle}></h3>
+                      </div>
+                    )}
+                  </div>
+                  <p style={styles.photoHint}>Рекомендуемое соотношение 4:5, до 500 КБ.</p>
                 </div>
-                <input type="file" ref={fileInputRef} hidden accept="image/*" onChange={handleFileSelect} />
-                <div style={styles.photoContainer}>
-                  {preview ? (
-                    <div onClick={() => fileInputRef.current.click()} style={styles.photoCard}>
-                      <img src={preview} alt="Invoice" style={styles.img} />
-                      <button type="button" onClick={handleDeletePhoto} style={styles.deleteBtn}>
-                        <TrashIcon />
-                      </button>
-                    </div>
-                  ) : (
-                    <div 
-                      onClick={() => fileInputRef.current.click()} 
-                      style={{
-                        ...styles.emptyPhotoCard,
-                        transform: isPhotoHovered ? 'translateY(-4px)' : 'translateY(0px)',
-                        boxShadow: isPhotoHovered ? shadows.sm : 'none'
-                      }}
-                      onMouseEnter={() => setIsPhotoHovered(true)}
-                      onMouseLeave={() => setIsPhotoHovered(false)}
-                    >
-                      <div style={styles.emptyIconBox}>+</div>
-                      <h3 style={styles.emptyTitle}></h3>
-                    </div>
-                  )}
+
+                <div style={styles.block}>
+                  <h3 style={styles.blockTitle}>Параметры чека</h3>
+                  <Input
+                    label="Заголовок чека" required
+                    value={config.invoice_title}
+                    onChange={handleChange('invoice_title')}
+                    error={errors.invoice_title}
+                    placeholder="Регистрация на мероприятие"
+                    hint="Отобразится под фотографией на чеке"
+                  />
+                  <Input
+                    label="Краткое описание" required
+                    value={config.invoice_description}
+                    onChange={handleChange('invoice_description')}
+                    error={errors.invoice_description}
+                    multiline rows={3}
+                    placeholder="За что платит пользователь..."
+                    hint="Отобразится под заголовком, не более 100 символов"
+                  />
+                  <Input
+                    label="Название позиции в чеке" required
+                    value={config.invoice_label}
+                    onChange={handleChange('invoice_label')}
+                    error={errors.invoice_label}
+                    placeholder="Регистрация"
+                    hint="Отобразится внутри чека при оплате"
+                  />
+
                 </div>
-                <p style={styles.photoHint}>Рекомендуемое соотношение 4:5, до 500 КБ.</p>
               </div>
 
-              <div style={styles.block}>
-                <h3 style={styles.blockTitle}>Параметры чека</h3>
-                <Input 
-                  label="Название чека" required
-                  value={config.invoice_label} 
-                  onChange={handleChange('invoice_label')} 
-                  error={errors.invoice_label}
-                  placeholder="Регистрация"
-                  hint="Отобразится в названии чека"
-                />
-                <Input 
-                  label="Название позиции" required
-                  value={config.invoice_title} 
-                  onChange={handleChange('invoice_title')} 
-                  error={errors.invoice_title}
-                  placeholder="Регистрация на мероприятие"
-                  hint="Заголовок товара в платежной системе"
+              <div style={styles.divider} />
+
+              <div style={dynamicStyles.limitsSection}>
+                <h3 style={styles.blockTitle}>Лимиты и сроки</h3>
+                <Input
+                  label="Максимальное количество пользователей" required
+                  type="number"
+                  value={config.max_users}
+                  onChange={handleChange('max_users')}
+                  error={errors.max_users}
+                  hint="Регистрация закроется автоматически при достижении лимита"
                 />
                 <Input
-                  label="Краткое описание" required
-                  value={config.invoice_description}
-                  onChange={handleChange('invoice_description')}
-                  error={errors.invoice_description}
-                  multiline rows={3}
-                  placeholder="За что платит пользователь..."
+                  label="Стоимость участия, ₽" required
+                  type="number"
+                  value={config.price}
+                  onChange={handleChange('price')}
+                  error={errors.price}
+                  hint="Диапазон: 69 — 15 000 ₽"
+                />
+                <Input
+                  label="Дата окончания регистрации"
+                  type="date"
+                  value={config.end_of_registration}
+                  onChange={handleChange('end_of_registration')}
+                  hint="После этой даты бот перестанет принимать новые заявки"
                 />
               </div>
-            </div>
 
-            <div style={styles.divider} />
+              <div style={styles.divider} />
 
-            <div style={dynamicStyles.limitsSection}>
-              <h3 style={styles.blockTitle}>Лимиты и сроки</h3>
-              <Input 
-                label="Максимальное количество пользователей" required
-                type="number" 
-                value={config.max_users} 
-                onChange={handleChange('max_users')}
-                error={errors.max_users}
-                hint="Регистрация закроется автоматически при достижении лимита"
-              />
-              <Input 
-                label="Стоимость участия, ₽" required
-                type="number" 
-                value={config.price} 
-                onChange={handleChange('price')}
-                error={errors.price}
-                hint="Диапазон: 69 — 15 000 ₽"
-              />
-              <Input 
-                label="Дата окончания регистрации" 
-                type="date" 
-                value={config.end_of_registration} 
-                onChange={handleChange('end_of_registration')}
-                hint="После этой даты бот перестанет принимать новые заявки"
-              />
-            </div>
-
-            <div style={styles.divider} />
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.lg }}>
-              <HTMLTextarea 
-                label="Приветственное сообщение" required
-                value={config.start_message} 
-                onChange={handleChange('start_message')} 
-                error={errors.start_message}
-                rows={4} 
-                hint="Отправляется при команде /start"
-              />
-
-              <HTMLTextarea 
-                label="Сообщение выбора мерча" required
-                value={config.merchant_message} 
-                onChange={handleChange('merchant_message')} 
-                error={errors.merchant_message}
-                rows={4}
-                hint="Отправляется при нажатии на Мерч, а также по команде /store"
-              />
-
-              <div style={dynamicStyles.gridTwo}>
-                <HTMLTextarea 
-                  label="Если регистрации закрыты" required
-                  value={config.closed_registrations_message} 
-                  onChange={handleChange('closed_registrations_message')} 
-                  error={errors.closed_registrations_message}
-                  rows={3}
-                  hint="Отправляется, если регистрации завершены либо не настроены шаги"
+              <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.lg }}>
+                <HTMLTextarea
+                  label="Приветственное сообщение" required
+                  value={config.start_message}
+                  onChange={handleChange('start_message')}
+                  error={errors.start_message}
+                  rows={4}
+                  hint="Стартовое сообщение бота"
                 />
-                <HTMLTextarea 
-                  label="Если уже зарегистрирован" required
-                  value={config.already_registered_message} 
-                  onChange={handleChange('already_registered_message')} 
-                  error={errors.already_registered_message}
-                  rows={3} 
-                  hint="Отправляется, если пользователь уже зарегистрирован"
+
+                <HTMLTextarea
+                  label="Сообщение выбора мерча" required
+                  value={config.merchant_message}
+                  onChange={handleChange('merchant_message')}
+                  error={errors.merchant_message}
+                  rows={4}
+                  hint="Мерч"
                 />
+
+                <HTMLTextarea
+                  label="Сообщение о сотрудничестве" required
+                  value={config.ceo_message}
+                  onChange={handleChange('ceo_message')}
+                  error={errors.ceo_message}
+                  rows={4}
+                  hint="Сотрудничество"
+                />
+
+                <HTMLTextarea
+                  label="Сообщение выбора мерча" required
+                  value={config.format_message}
+                  onChange={handleChange('format_message')}
+                  error={errors.format_message}
+                  rows={4}
+                  hint="Формат мероприятия"
+                />
+
+                <div style={dynamicStyles.gridTwo}>
+                  <HTMLTextarea
+                    label="Если регистрации закрыты" required
+                    value={config.closed_registrations_message}
+                    onChange={handleChange('closed_registrations_message')}
+                    error={errors.closed_registrations_message}
+                    rows={3}
+                    hint="Отправляется, если регистрации завершены либо не настроены шаги"
+                  />
+                  <HTMLTextarea
+                    label="Если уже зарегистрирован" required
+                    value={config.already_registered_message}
+                    onChange={handleChange('already_registered_message')}
+                    error={errors.already_registered_message}
+                    rows={3}
+                    hint="Отправляется, если пользователь уже зарегистрирован"
+                  />
+                </div>
               </div>
-            </div>
 
-            <div style={{ marginTop: spacing.xl }}>
-              <Button variant="primary" type="submit" loading={saving} fullWidth>
-                Сохранить все настройки
-              </Button>
-            </div>
-          </form>
+              <div style={{ marginTop: spacing.xl }}>
+                <Button variant="primary" type="submit" loading={saving} fullWidth>
+                  Сохранить все настройки
+                </Button>
+              </div>
+            </form>
+          </div>
         </div>
-      </div>
 
-      <NoticeModal 
-        open={notice.open} 
-        type={notice.type} 
-        text={notice.text} 
-        onClose={() => setNotice({ ...notice, open: false })} 
-      />
-    </div>
+        <NoticeModal
+          open={notice.open}
+          type={notice.type}
+          text={notice.text}
+          onClose={() => setNotice({ ...notice, open: false })}
+        />
+      </div>
+    </PageLayout>
   );
 }
 
@@ -374,35 +404,35 @@ const styles = {
   photoHint: { fontSize: 12, color: colors.gray400, lineHeight: 1.4, marginBottom: '16px', fontWeight: 500, marginTop: spacing.xs},
   divider: { height: 1, background: colors.gray100, margin: '32px 0' },
   photoContainer: { width: '100%' },
-  photoCard: { 
-    background: colors.white, 
-    position: 'relative', 
-    aspectRatio: '4/5', 
-    borderRadius: borderRadius.large, 
-    overflow: 'hidden', 
+  photoCard: {
+    background: colors.white,
+    position: 'relative',
+    aspectRatio: '4/5',
+    borderRadius: borderRadius.large,
+    overflow: 'hidden',
     border: `1px solid ${colors.gray200}`,
     cursor: 'pointer'
   },
   img: { width: '100%', height: '100%', objectFit: 'cover' },
-  deleteBtn: { 
-    position: 'absolute', top: 10, right: 10, background: colors.primary, 
-    border: 'none', width: 32, height: 32, borderRadius: 8, display: 'flex', 
+  deleteBtn: {
+    position: 'absolute', top: 10, right: 10, background: colors.primary,
+    border: 'none', width: 32, height: 32, borderRadius: 8, display: 'flex',
     alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 10, boxShadow: shadows.md
   },
-  emptyPhotoCard: { 
-    width: '100%', aspectRatio: '4/5', border: `2px dashed ${colors.gray200}`, 
-    borderRadius: borderRadius.large, display: 'flex', flexDirection: 'column', 
-    alignItems: 'center', justifyContent: 'center', cursor: 'pointer', 
+  emptyPhotoCard: {
+    width: '100%', aspectRatio: '4/5', border: `2px dashed ${colors.gray200}`,
+    borderRadius: borderRadius.large, display: 'flex', flexDirection: 'column',
+    alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
     background: 'rgb(250, 250, 250)', transition: '0.2s ease',
   },
   emptyIconBox: {
     width: 48, height: 48, marginBottom: '12px', borderRadius: '12px', background: colors.white,
-    border: `2px dashed ${colors.gray200}`, display: 'flex', alignItems: 'center', 
+    border: `2px dashed ${colors.gray200}`, display: 'flex', alignItems: 'center',
     justifyContent: 'center', fontSize: 24, color: colors.gray400,
   },
   emptyTitle: { fontSize: 14, fontWeight: 700, color: colors.primary, margin: 0 },
   block: { display: 'flex', flexDirection: 'column', gap: spacing.md },
-  blockTitle: { 
+  blockTitle: {
     fontSize: 14, fontWeight: 700, color: colors.gray800, marginBottom: spacing.xs,
     textTransform: 'uppercase', letterSpacing: '0.5px'
   },

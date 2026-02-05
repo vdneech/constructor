@@ -1,848 +1,503 @@
-// pages/Users/UsersList.jsx
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+// src/pages/Users/UsersList.jsx
+import React, { useCallback, useEffect, useState } from 'react';
 import { usersApi } from '../../services/api';
-import { 
-  Button, 
-  Input, 
-  Checkbox, 
-  OverlayModal, 
+import {
+  Button,
+  Input,
+  Checkbox,
   NoticeModal,
   ConfirmModal,
   Badge,
-  IconButton,
   LineNumberTextarea,
-  EditIcon,
-  DeleteIcon,
   PageHeader,
-  ErrorPage,
-  NetworkErrorPage,
-  Spinner
+  EmptyStateCard
 } from '../../components/common';
-import { useIsMobile } from '../../hooks';
+import PageLayout from '../../components/PageLayout';
+import { useIsMobile, usePageData } from '../../hooks';
 import { parseApiError } from '../../utils';
-import { colors, typography, shadows, borderRadius, spacing } from '../../styles/theme';
-
-
-
-/* ---------- MAIN COMPONENT ---------- */
-
-
+import { pageStyles } from '../../styles/pageStyles';
+import { colors, spacing, borderRadius, shadows, typography } from '../../styles/theme';
 
 export default function UsersList() {
-  // State
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(null);
+  const isMobile = useIsMobile();
 
+  // --- State: Pagination ---
+  const [page, setPage] = useState(1);
+  const [hasNext, setHasNext] = useState(false);
+  const [hasPrev, setHasPrev] = useState(false);
 
+  // --- State: Modals ---
   const [editOpen, setEditOpen] = useState(false);
   const [editUser, setEditUser] = useState(null);
   const [extrasText, setExtrasText] = useState('{}');
   const [saving, setSaving] = useState(false);
-  const [editError, setEditError] = useState(null);
-
+  const [modalError, setModalError] = useState(null);
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteUser, setDeleteUser] = useState(null);
   const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState(null);
-
 
   const [cleanRegistrationsOpen, setCleanRegistrationsOpen] = useState(false);
   const [cleanPaymentsOpen, setCleanPaymentsOpen] = useState(false);
-  const [cleaningRegistrations, setCleaningRegistrations] = useState(false);
-  const [cleaningPayments, setCleaningPayments] = useState(false);
-  const [cleanError, setCleanError] = useState(null);
+  const [cleaning, setCleaning] = useState(false);
 
+  const [notice, setNotice] = useState({ open: false, type: 'success', text: '' });
 
-  const [successOpen, setSuccessOpen] = useState(false);
-  const [successText, setSuccessText] = useState('');
+  const [localUsers, setLocalUsers] = useState([]);
 
+  const fetchUsers = useCallback(() => {
+    return usersApi.list({ params: { page } });
+  }, [page]);
 
-  const isMobile = useIsMobile();
+  const { data, loading, error, retry } = usePageData(fetchUsers, [page]);
 
-
-
-  // Effects
+  // Обновляем список при получении данных
   useEffect(() => {
-    loadUsers();
-  }, []);
-
-
-
-  // Handlers
-  const loadUsers = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
-
-
-    try {
-      const data = await usersApi.list();
-
-
-      let results = [];
-      if (data?.results) {
-        results = data.results;
-
-
-        let next = data.next;
-        while (next) {
-          const page = await fetch(next, {
-            headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
-          }).then((r) => r.json());
-          results = [...results, ...(page?.results || [])];
-          next = page?.next;
-        }
-      } else if (Array.isArray(data)) {
-        results = data;
-      }
-
-
-      // Показываем всех пользователей, включая суперюзеров
-      setUsers(results);
-    } catch (e) {
-      console.error(e);
-      setLoadError('Не удалось загрузить пользователей');
-    } finally {
-      setLoading(false);
+    if (data) {
+      const results = data.results || data || [];
+      setLocalUsers(results);
+      setHasNext(!!data.next);
+      setHasPrev(!!data.previous);
     }
-  }, []);
+  }, [data]);
 
+  // Обработка 404
+  useEffect(() => {
+    if (error && error.originalError?.response?.status === 404 && page > 1) {
+      setPage(1);
+    }
+  }, [error, page]);
 
-  const openEdit = useCallback((user) => {
-    setEditError(null);
-    setEditUser({ ...user });
+  // --- Handlers: Pagination ---
+  const handleNext = () => { if (hasNext) setPage(p => p + 1); };
+  const handlePrev = () => { if (hasPrev) setPage(p => Math.max(1, p - 1)); };
 
-
+  // --- Handlers: Edit ---
+  const openEdit = (user) => {
+    setModalError(null);
+    setEditUser({ ...user }); // Копируем пользователя
     const extras = user?.extras && typeof user.extras === 'object' ? user.extras : {};
     setExtrasText(JSON.stringify(extras, null, 2));
     setEditOpen(true);
-  }, []);
+  };
 
+  const handleSaveUser = async (e) => {
+    e.preventDefault();
+    if (!editUser) return;
+    setModalError(null);
 
-  const closeEdit = useCallback(() => {
-    if (saving) return;
-    setEditOpen(false);
-    setEditUser(null);
-    setExtrasText('{}');
-    setEditError(null);
-  }, [saving]);
+    let extrasObj = {};
+    try {
+      extrasObj = extrasText.trim() ? JSON.parse(extrasText) : {};
+    } catch (parseErr) {
+      setModalError(`Ошибка JSON: ${parseErr.message}`);
+      return;
+    }
 
+    setSaving(true);
+    try {
+      const payload = {
+        username: editUser.username,
+        first_name: editUser.first_name, // Новое поле
+        last_name: editUser.last_name,   // Новое поле
+        email: editUser.email,
+        phone: editUser.phone,
+        is_registered: !!editUser.is_registered,
+        paid: !!editUser.paid,
+        extras: extrasObj,
+      };
 
-  const openDelete = useCallback((user) => {
-    setDeleteError(null);
-    setDeleteUser(user);
-    setDeleteOpen(true);
-  }, []);
+      await usersApi.update(editUser.id, payload);
+      setEditOpen(false);
+      setNotice({ open: true, type: 'success', text: `Пользователь ${editUser.username} обновлен` });
+      retry();
+    } catch (err) {
+      setModalError(parseApiError(err));
+    } finally {
+      setSaving(false);
+    }
+  };
 
-
-  const closeDelete = useCallback(() => {
-    if (deleting) return;
-    setDeleteOpen(false);
-    setDeleteUser(null);
-    setDeleteError(null);
-  }, [deleting]);
-
-
-  const openCleanRegistrations = useCallback(() => {
-    setCleanError(null);
-    setCleanRegistrationsOpen(true);
-  }, []);
-
-
-  const closeCleanRegistrations = useCallback(() => {
-    if (cleaningRegistrations) return;
-    setCleanRegistrationsOpen(false);
-    setCleanError(null);
-  }, [cleaningRegistrations]);
-
-
-  const openCleanPayments = useCallback(() => {
-    setCleanError(null);
-    setCleanPaymentsOpen(true);
-  }, []);
-
-
-  const closeCleanPayments = useCallback(() => {
-    if (cleaningPayments) return;
-    setCleanPaymentsOpen(false);
-    setCleanError(null);
-  }, [cleaningPayments]);
-
-
-  const formatExtras = useCallback(() => {
+  const formatExtras = () => {
     try {
       const obj = extrasText.trim() ? JSON.parse(extrasText) : {};
       setExtrasText(JSON.stringify(obj, null, 2));
-      setEditError(null);
+      setModalError(null);
     } catch (e) {
-      setEditError(`Настраиваемые поля: невалидный JSON\n${e.message}`);
+      setModalError(`Невалидный JSON: ${e.message}`);
     }
-  }, [extrasText]);
+  };
 
+  // --- Handlers: Delete ---
+  const openDelete = (user) => {
+    setDeleteUser(user);
+    setDeleteOpen(true);
+  };
 
-  const handleSaveUser = useCallback(
-    async (e) => {
-      e.preventDefault();
-      if (!editUser) return;
-
-
-      setEditError(null);
-
-
-      let extrasObj = {};
-      try {
-        extrasObj = extrasText.trim() ? JSON.parse(extrasText) : {};
-      } catch (parseErr) {
-        setEditError(`Extras: невалидный JSON\n${parseErr.message}`);
-        return;
-      }
-
-
-      if (extrasObj === null || Array.isArray(extrasObj) || typeof extrasObj !== 'object') {
-        setEditError('Extras: должен быть JSON-объектом (например {"has_cat": "да"})');
-        return;
-      }
-
-
-      setSaving(true);
-      try {
-        const payload = {
-          username: editUser.username,
-          email: editUser.email,
-          phone: editUser.phone,
-          is_registered: !!editUser.is_registered,
-          paid: !!editUser.paid,
-          extras: extrasObj,
-        };
-
-
-        await usersApi.update(editUser.id, payload);
-        await loadUsers();
-
-
-        setEditOpen(false);
-        setSuccessText(`Пользователь @${editUser.username} обновлён`);
-        setSuccessOpen(true);
-      } catch (err) {
-        console.error(err);
-        setEditError(parseApiError(err));
-      } finally {
-        setSaving(false);
-      }
-    },
-    [editUser, extrasText, loadUsers]
-  );
-
-
-  const handleConfirmDelete = useCallback(async () => {
+  const handleConfirmDelete = async () => {
     if (!deleteUser) return;
-
-
-    setDeleteError(null);
     setDeleting(true);
     try {
       await usersApi.remove(deleteUser.id);
-      await loadUsers();
-
-
       setDeleteOpen(false);
-      setSuccessText(`Пользователь @${deleteUser.username} удалён`);
-      setSuccessOpen(true);
+      setNotice({ open: true, type: 'success', text: 'Пользователь удален' });
+      if (editOpen && editUser?.id === deleteUser.id) {
+        setEditOpen(false);
+      }
+      retry();
     } catch (err) {
-      console.error(err);
-      setDeleteError(parseApiError(err));
+      setNotice({ open: true, type: 'error', text: parseApiError(err) });
     } finally {
       setDeleting(false);
     }
-  }, [deleteUser, loadUsers]);
+  };
 
-
-  const handleDeleteFromEdit = useCallback(() => {
-    if (!editUser) return;
-    
-    // Закрываем модалку редактирования и открываем модалку подтверждения удаления
-    setDeleteUser(editUser);
-    setEditOpen(false);
-    setDeleteOpen(true);
-  }, [editUser]);
-
-
-  const handleConfirmCleanRegistrations = useCallback(async () => {
-    setCleanError(null);
-    setCleaningRegistrations(true);
+  // --- Handlers: Batch Actions ---
+  const handleBatchAction = async (actionType) => {
+    setCleaning(true);
     try {
-      await usersApi.cleanRegistrations();
-      window.location.reload();
+      if (actionType === 'registrations') {
+        await usersApi.cleanRegistrations();
+        setCleanRegistrationsOpen(false);
+      } else {
+        await usersApi.cleanPayments();
+        setCleanPaymentsOpen(false);
+      }
+      setNotice({ open: true, type: 'success', text: 'Операция выполнена успешно' });
+      retry();
     } catch (err) {
-      console.error(err);
-      setCleanError(parseApiError(err));
+      setNotice({ open: true, type: 'error', text: parseApiError(err) });
     } finally {
-      setCleaningRegistrations(false);
+      setCleaning(false);
     }
-  }, []);
+  };
 
+  const gridStyle = {
+    display: 'grid',
+    gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(340px, 1fr))',
+    gap: spacing.md,
+    maxWidth: '100%',
+    width: '100%',
+  };
 
-  const handleConfirmCleanPayments = useCallback(async () => {
-    setCleanError(null);
-    setCleaningPayments(true);
-    try {
-      await usersApi.cleanPayments();
-      window.location.reload();
-    } catch (err) {
-      console.error(err);
-      setCleanError(parseApiError(err));
-    } finally {
-      setCleaningPayments(false);
-    }
-  }, []);
-
-
-
-  // Computed
-  // Computed
-  const list = useMemo(() => users, [users]);
-
-  // --- ЛОГИКА ОБРАБОТКИ ОШИБОК И ЗАГРУЗКИ ---
-
-  if (loadError) {
-    // Преобразуем ошибку в строку для надежного поиска подстрок
-    const currentError = String(loadError);
-
-    // 1. Проверка на сетевую ошибку (Network Error)
-    if (
-      currentError.includes('Network Error') || 
-      currentError.includes('сетевая') || 
-      currentError.includes('Failed to fetch') ||
-      currentError === 'null' // Если parseApiError вернул строку "null"
-    ) {
-      return <NetworkErrorPage onRetry={loadUsers} />;
-    }
-
-    // 2. Проверка на обычные серверные ошибки (4xx, 5xx)
-    return (
-      <ErrorPage 
-        code="500" 
-        title="Ошибка загрузки" 
-        message={currentError} 
-      />
-    );
-  }
-
-  // 3. Состояние загрузки (Spinner теперь импортирован выше)
-  if (loading) {
-    return (
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center',
-        minHeight: '100vh',
-        background: colors.background,
-      }}>
-        <Spinner size={40} />
-        <div style={{ marginTop: 20, color: colors.gray500, fontWeight: 500 }}>
-          Загрузка пользователей...
-        </div>
-      </div>
-    );
-  }
-
-    
-if (loading) {
   return (
-    <div style={styles.center}>
-      <Spinner size={40} />
-      <div style={{ marginTop: 20, color: colors.gray500 }}>Загрузка пользователей...</div>
-    </div>
-  );
-}
-  // JSX
-  return (
-    <div style={styles.page}>
-      <div style={styles.wrap}>
-        {/* Header */}
-        <PageHeader
-          title="Пользователи"
-          subtitle="Для редактирования нажмите на карточку"
-          isMobile={isMobile}
-          actionsInline={true}
-          actions={
-              <>
-                <Button
-
-                  onClick={openCleanRegistrations}
-                  style={isMobile ? { width: '100%' } : {}}
-                >
-                  Стереть все регистрации
+    <PageLayout loading={loading} error={error} onRetry={retry}>
+      <div style={pageStyles.page}>
+        <div style={pageStyles.container}>
+          <PageHeader
+            title="Пользователи"
+            subtitle="Управление базой пользователей"
+            isMobile={isMobile}
+            actions={
+              <div style={{ display: 'flex', gap: spacing.sm, flexDirection: isMobile ? 'column' : 'row', width: isMobile ? '100%' : 'auto' }}>
+                <Button variant="primary" onClick={() => setCleanRegistrationsOpen(true)} disabled={loading} fullWidth={isMobile}>
+                  Сброс регистраций
                 </Button>
-                <Button 
-                  onClick={openCleanPayments}
-                  style={isMobile ? { width: '100%' } : {}}
-                >
-                  Убрать все оплаты
+                <Button variant="primary" onClick={() => setCleanPaymentsOpen(true)} disabled={loading} fullWidth={isMobile}>
+                  Сброс оплат
                 </Button>
-              </>
+              </div>
             }
-        />
+          />
 
-
-        {/* Main Card */}
-        <div style={{ ...styles.card, ...(isMobile && styles.cardMobile) }}>
-          
-
-
-          {loading ? (
-            <div style={styles.muted}>Загрузка...</div>
-          ) : list.length === 0 ? (
-            <div style={styles.muted}>Пользователи не найдены</div>
+          {localUsers.length === 0 ? (
+            <EmptyStateCard title="Список пуст" description="Пользователи еще не добавлены в базу." isMobile={isMobile} />
           ) : (
-            <div style={styles.list}>
-              {list.map((u) => {
-                const usernameAt = u.username ? `@${u.username}` : '—';
-                const phone = (u.phone || '').trim();
+            <>
+              <div style={gridStyle}>
+                {localUsers.map((user) => (
+                  <UserCard key={user.id} user={user} isMobile={isMobile} onEdit={() => openEdit(user)} />
+                ))}
+              </div>
 
-
-                return (
-                  <div key={u.id} style={{ ...styles.row, ...(isMobile && styles.rowMobile) }}>
-                    {/* Left Side - User Info */}
-                    <div 
-                      style={{ 
-                        ...styles.left, 
-                        ...(isMobile && styles.leftMobile),
-                        ...(isMobile && !u.is_superuser && styles.leftClickable)
-                      }}
-                      onClick={isMobile && !u.is_superuser ? () => openEdit(u) : undefined}
-                    >
-                      <div style={styles.usernameRow}>
-                        <div style={styles.username}>{usernameAt}</div>
-                        {u.is_superuser && (
-                          <Badge 
-                            variant="primary"
-                            style={styles.adminBadge}
-                          >
-                            Админ
-                          </Badge>
-                        )}
-                      </div>
-
-
-                      <div style={{ ...styles.badges, ...(isMobile && styles.badgesMobile) }}>
-                        {/* Registration Status */}
-                        {u.is_registered ? (
-                          <Badge 
-                            variant="primary"
-                            style={isMobile ? styles.badgeMobile : {}}
-                          >
-                            Зарегистрирован
-                          </Badge>
-                        ) : (
-                          <Badge 
-                            style={{
-                              background: colors.background,
-                              border: `2px dashed ${colors.gray300}`,
-                              color: colors.gray500,
-                              ...(isMobile && styles.badgeMobile),
-                            }}
-                          >
-                            Не зарегистрирован
-                          </Badge>
-                        )}
-
-
-                        {/* Payment Status */}
-                        {u.paid ? (
-                          <Badge 
-                            variant="primary"
-                            style={isMobile ? styles.badgeMobile : {}}
-                          >
-                            Оплачено
-                          </Badge>
-                        ) : (
-                          <Badge 
-                            style={{
-                              background: colors.background,
-                              border: `2px dashed ${colors.gray300}`,
-                              color: colors.gray500,
-                              ...(isMobile && styles.badgeMobile),
-                            }}
-                          >
-                            Не оплачено
-                          </Badge>
-                        )}
-
-
-                        {/* Phone */}
-                        {phone ? (
-                          <Badge 
-                            href={`tel:${phone}`}
-                            style={{
-                              background: colors.background,
-                              border: `1px solid ${colors.gray200}`,
-                              color: colors.primary,
-                              ...(isMobile && styles.badgeMobile),
-                            }}
-                          >
-                            {phone}
-                          </Badge>
-                        ) : (
-                          <Badge 
-                            style={{
-                              background: colors.background,
-                              border: `1px solid ${colors.gray200}`,
-                              color: colors.gray400,
-                              ...(isMobile && styles.badgeMobile),
-                            }}
-                          >
-                            Телефон: —
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-
-
-                    {/* Right Side - Action Buttons (только на десктопе и не для админов) */}
-                    {!isMobile && !u.is_superuser && (
-                      <div style={styles.right}>
-                        <IconButton
-                          icon={<DeleteIcon size={18} />}
-                          variant="secondary"
-                          title="Удалить пользователя"
-                          onClick={() => openDelete(u)}
-                        />
-                        <IconButton
-                          icon={<EditIcon size={18} />}
-                          variant="primary"
-                          title="Изменить пользователя"
-                          onClick={() => openEdit(u)}
-                        />
-                        
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+              <div style={styles.pagination}>
+                <Button variant="secondary" disabled={!hasPrev || loading} onClick={handlePrev}>← Назад</Button>
+                <div style={styles.pageNumber}>{page}</div>
+                <Button variant="secondary" disabled={!hasNext || loading} onClick={handleNext}>Вперед →</Button>
+              </div>
+            </>
           )}
         </div>
 
+        {/* СПЕЦИАЛЬНАЯ БЕЛАЯ МОДАЛКА РЕДАКТИРОВАНИЯ */}
+        <UserEditModal
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          title="Редактирование пользователя"
+        >
+          <form onSubmit={handleSaveUser} style={{ display: 'flex', flexDirection: 'column', gap: spacing.lg }}>
 
-        {/* Edit Modal */}
-        <OverlayModal open={editOpen} title="Редактирование пользователя" onClose={closeEdit}>
-          <form onSubmit={handleSaveUser} style={styles.form}>
-            
-
-
+            {/* Имя пользователя */}
             <Input
               label="Имя пользователя"
-              type="text"
               required
               value={editUser?.username || ''}
-              onChange={(e) => setEditUser((prev) => ({ ...prev, username: e.target.value }))}
+              onChange={(e) => setEditUser({ ...editUser, username: e.target.value })}
             />
 
+            {/* Имя и Фамилия (2 колонки на ПК) */}
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: spacing.md }}>
+               <Input
+                label="Имя"
+                required
+                value={editUser?.first_name || ''}
+                onChange={(e) => setEditUser({ ...editUser, first_name: e.target.value })}
+              />
+              <Input
+                label="Фамилия"
+                required
+                value={editUser?.last_name || ''}
+                onChange={(e) => setEditUser({ ...editUser, last_name: e.target.value })}
+              />
+            </div>
 
-            <div style={{ ...styles.row2, ...(isMobile && styles.row2Mobile) }}>
+            {/* Email и Телефон (2 колонки на ПК) */}
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: spacing.md }}>
               <Input
                 label="Email"
                 type="email"
                 value={editUser?.email || ''}
-                onChange={(e) => setEditUser((prev) => ({ ...prev, email: e.target.value }))}
+                onChange={(e) => setEditUser({ ...editUser, email: e.target.value })}
               />
-
-
               <Input
                 label="Телефон"
-                type="text"
                 value={editUser?.phone || ''}
-                onChange={(e) => setEditUser((prev) => ({ ...prev, phone: e.target.value }))}
-                placeholder="Например: +79991234567"
+                onChange={(e) => setEditUser({ ...editUser, phone: e.target.value })}
               />
             </div>
 
+            {/* Чекбоксы */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.sm, padding: '8px 0' }}>
+              <Checkbox
+                checked={!!editUser?.is_registered}
+                onChange={() => setEditUser({ ...editUser, is_registered: !editUser.is_registered })}
+                title="Зарегистрирован"
+                description="Пользователь прошел процесс регистрации"
+              />
+              <Checkbox
+                checked={!!editUser?.paid}
+                onChange={() => setEditUser({ ...editUser, paid: !editUser.paid })}
+                title="Оплачено"
+                description="Пользователь оплатил участие"
+              />
+            </div>
 
-            <Checkbox
-              checked={!!editUser?.is_registered}
-              onChange={() => setEditUser((prev) => ({ ...prev, is_registered: !prev.is_registered }))}
-              title="Регистрация пройдена"
-              description="Отметить, если пользователь прошёл регистрацию"
-            />
-
-
-            <Checkbox
-              checked={!!editUser?.paid}
-              onChange={() => setEditUser((prev) => ({ ...prev, paid: !prev.paid }))}
-              title="Взнос оплачен"
-              description="Отметить, если оплата подтверждена"
-            />
-
-
+            {/* JSON Extras */}
             <div>
-              <div style={styles.labelRow}>
-                <label style={styles.label}>Настраиваемые поля</label>
-                <Button 
-                  variant="secondary" 
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <label style={styles.label}>Дополнительные данные (JSON)</label>
+                <Button
+                  variant="secondary"
                   onClick={formatExtras}
-                  style={styles.btnSmall}
+                  type="button"
+                  style={{ padding: '4px 10px', height: 'auto', fontSize: 12 }}
                 >
                   Форматировать
                 </Button>
               </div>
-
-
               <LineNumberTextarea
                 value={extrasText}
                 onChange={(e) => setExtrasText(e.target.value)}
-                rows={9}
-                spellCheck={false}
-                placeholder='{"has_cat": "да"}'
-                hint="Должен быть JSON-объект. Можно редактировать любые ключи."
+                rows={6}
+                placeholder='{"key": "value"}'
               />
             </div>
 
+            {modalError && <div style={styles.errorBox}>{modalError}</div>}
 
-            <div style={styles.formActions}>
-              <Button 
-                variant="secondary" 
-                onClick={handleDeleteFromEdit}
-                disabled={saving || deleting}
+            {/* Кнопки действий */}
+            <div style={{
+               display: 'flex',
+               flexDirection: isMobile ? 'column-reverse' : 'row', // На мобилках кнопки друг под другом
+               justifyContent: 'space-between',
+               gap: spacing.md,
+               marginTop: spacing.md
+            }}>
+              <Button
+                variant="secondary"
+                onClick={() => { setEditOpen(false); openDelete(editUser); }}
+                type="button"
+                fullWidth={isMobile}
+                style={{color: colors.error}}
               >
-                Удалить пользователя
+                Удалить
               </Button>
-              <Button 
-                variant="primary" 
+              <Button
+                variant="primary"
                 type="submit"
                 loading={saving}
-                loadingText="Сохранение..."
-                disabled={deleting}
+                fullWidth={isMobile}
               >
-                Сохранить
+                Сохранить изменения
               </Button>
             </div>
           </form>
-        </OverlayModal>
+        </UserEditModal>
 
-
-        {/* Delete Modal */}
         <ConfirmModal
           open={deleteOpen}
           title="Удаление пользователя"
-          message={`Вы уверены, что хотите удалить пользователя ${deleteUser?.username}?`}
-          description="Это действие нельзя будет отменить."
-          onClose={closeDelete}
-          onConfirm={handleConfirmDelete}
+          message={`Вы уверены, что хотите удалить ${deleteUser?.username}?`}
+          description="Это действие нельзя отменить."
           confirmText="Удалить"
           cancelText="Отмена"
           loading={deleting}
+          onConfirm={handleConfirmDelete}
+          onClose={() => setDeleteOpen(false)}
         />
+        <ConfirmModal open={cleanRegistrationsOpen} title="Сброс регистраций" message="Сбросить все регистрации?" confirmText="Сбросить" loading={cleaning} onConfirm={() => handleBatchAction('registrations')} onClose={() => setCleanRegistrationsOpen(false)} />
+        <ConfirmModal open={cleanPaymentsOpen} title="Сбросить все оплаты" message="Отменить все оплаты пользователей?" description="Это действие нельзя отменить" confirmText="Сбросить" loading={cleaning} onConfirm={() => handleBatchAction('payments')} onClose={() => setCleanPaymentsOpen(false)} />
+        <NoticeModal open={notice.open} type={notice.type} text={notice.text} onClose={() => setNotice({ ...notice, open: false })} />
+      </div>
+    </PageLayout>
+  );
+}
 
+// --- СПЕЦИАЛЬНЫЙ КОМПОНЕНТ БЕЛОЙ МОДАЛКИ ДЛЯ ФОРМЫ ---
+function UserEditModal({ open, title, onClose, children }) {
+  const [mounted, setMounted] = useState(false);
+  const [show, setShow] = useState(false);
 
-        {/* Clean Registrations Modal */}
-        <ConfirmModal
-          open={cleanRegistrationsOpen}
-          title="Стереть все регистрации"
-          message="Стереть все регистрации пользователей?"
-          description="Это действие нельзя отменить."
-          onClose={closeCleanRegistrations}
-          onConfirm={handleConfirmCleanRegistrations}
-          confirmText="Стереть"
-          cancelText="Отмена"
-          loading={cleaningRegistrations}
-          loadingText="Стираю..."
-          error={cleanError}
-          onErrorClose={() => setCleanError(null)}
-        />
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      setTimeout(() => setShow(true), 10);
+      document.body.style.overflow = 'hidden';
+    } else {
+      setShow(false);
+      const timer = setTimeout(() => {
+        setMounted(false);
+        document.body.style.overflow = '';
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [open]);
 
+  if (!mounted) return null;
 
-        {/* Clean Payments Modal */}
-        <ConfirmModal
-          open={cleanPaymentsOpen}
-          title="Убрать все оплаты"
-          message="Убрать все оплаты пользователей?"
-          description="Это действие нельзя отменить."
-          onClose={closeCleanPayments}
-          onConfirm={handleConfirmCleanPayments}
-          confirmText="Убрать"
-          cancelText="Отмена"
-          loading={cleaningPayments}
-          loadingText="Убираю..."
-          error={cleanError}
-          onErrorClose={() => setCleanError(null)}
-        />
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 10000,
+        backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 20,
+        opacity: show ? 1 : 0, transition: 'opacity 0.3s ease',
+      }}
+      onClick={(e) => { if(e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{
+        backgroundColor: '#FFFFFF', // Белый фон
+        color: '#1F2937',           // Темный текст
+        width: '100%', maxWidth: '600px',
+        maxHeight: '90vh', overflowY: 'auto',
+        borderRadius: '16px',
+        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+        display: 'flex', flexDirection: 'column', position: 'relative',
+        transform: show ? 'scale(1)' : 'scale(0.95)',
+        transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+      }} onClick={e => e.stopPropagation()}>
 
+        {/* Шапка модалки */}
+        <div style={{
+          padding: '20px 24px', borderBottom: '1px solid #E5E7EB',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+        }}>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, fontFamily: typography.fontFamily }}>{title}</h3>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              color: '#9CA3AF', padding: 4, display: 'flex'
+            }}
+          >
+            <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
 
-        {/* Success Modal */}
-        <NoticeModal
-          open={successOpen}
-          type="success"
-          title="Успешно!"
-          text={successText}
-          onClose={() => setSuccessOpen(false)}
-        />
+        {/* Тело модалки */}
+        <div style={{ padding: '24px' }}>
+          {children}
+        </div>
       </div>
     </div>
   );
 }
 
+// --- КАРТОЧКА ПОЛЬЗОВАТЕЛЯ (Без изменений) ---
+function UserCard({ user, isMobile, onEdit }) {
+  const [isHovered, setIsHovered] = useState(false);
 
+  return (
+    <div
+      style={{
+        ...styles.card,
+        transform: isHovered && !isMobile ? 'translateY(-2px)' : 'none',
+        boxShadow: isHovered && !isMobile ? shadows.md : shadows.card,
+      }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      onClick={onEdit}
+    >
+      <div style={styles.cardHeader}>
+        <div style={{marginLeft: spacing.xs, color: colors.primary}}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="currentColor" className="bi bi-person-fill-gear" viewBox="0 0 16 16">
+            <path d="M11 5a3 3 0 1 1-6 0 3 3 0 0 1 6 0m-9 8c0 1 1 1 1 1h5.256A4.5 4.5 0 0 1 8 12.5a4.5 4.5 0 0 1 1.544-3.393Q8.844 9.002 8 9c-5 0-6 3-6 4m9.886-3.54c.18-.613 1.048-.613 1.229 0l.043.148a.64.64 0 0 0 .921.382l.136-.074c.561-.306 1.175.308.87.869l-.075.136a.64.64 0 0 0 .382.92l.149.045c.612.18.612 1.048 0 1.229l-.15.043a.64.64 0 0 0-.38.921l.074.136c.305.561-.309 1.175-.87.87l-.136-.075a.64.64 0 0 0-.92.382l-.045.149c-.18.612-1.048.612-1.229 0l-.043-.15a.64.64 0 0 0-.921-.38l-.136.074c-.561.305-1.175-.309-.87-.87l.075-.136a.64.64 0 0 0-.382-.92l-.148-.045c-.613-.18-.613-1.048 0-1.229l.148-.043a.64.64 0 0 0 .382-.921l-.074-.136c-.306-.561.308-1.175.869-.87l.136.075a.64.64 0 0 0 .92-.382zM14 12.5a1.5 1.5 0 1 0-3 0 1.5 1.5 0 0 0 3 0"/>
+          </svg>
+        </div>
+        <div style={styles.headerInfo}>
+          <div style={styles.usernameRow}>
+            <span style={styles.username} title={user.username}>@{user.username || 'Без имени'}</span>
+            {user.is_superuser && <label style={styles.adminLabel} htmlFor="">Администратор</label>}
+            <label style={styles.userLabel} htmlFor="">Нажмите, чтобы редактировать</label>
+          </div>
+        </div>
+      </div>
 
-/* ---------- STYLES ---------- */
+      <div style={styles.infoGrid}>
+        <InfoRow label="EMAIL" value={user.email} />
+        <InfoRow label="ТЕЛЕФОН" value={user.phone} />
+      </div>
+
+      <div style={styles.badges}>
+        <Badge variant={user.is_registered ? 'success' : 'inactive'} style={styles.fullWidthBadge}>Регистрация</Badge>
+        <Badge variant={user.paid ? 'warning' : 'inactive'} style={styles.fullWidthBadge}>Оплата</Badge>
+      </div>
+    </div>
+  );
+}
+
+const InfoRow = ({ label, value }) => (
+  <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <span style={{ color: colors.gray400, fontSize: 12, fontWeight: 800 }}>{label}</span>
+    <span style={{ color: colors.text, fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis' }}>{value || '—'}</span>
+  </div>
+);
+
 const styles = {
-  // Page Layout
-  page: {
-    minHeight: '100vh',
-    background: colors.background,
-    fontFamily: typography.fontFamily,
-    padding: `${spacing.xxxl}px ${spacing.lg}px`,
-  },
-  wrap: {
-    maxWidth: '120vh',
-    margin: '0 auto',
-  },
-  center: {
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: '100vh',
-    background: colors.background,
-  },
-
-  // Card
+  pagination: { display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: spacing.xl, gap: spacing.md, paddingBottom: spacing.xl },
+  pageNumber: { fontSize: 14, fontWeight: 600, color: colors.gray500 },
   card: {
     background: colors.white,
     borderRadius: borderRadius.card,
     boxShadow: shadows.card,
-    padding: spacing.xxxl,
-  },
-  cardMobile: {
-    padding: spacing.lg,
-    borderRadius: borderRadius.cardMobile,
-  },
-  muted: {
-    color: colors.gray500,
-    fontSize: 15,
-    fontWeight: 500,
-  },
-
-  // List
-  list: {
-    display: 'flex',
-    flexDirection: 'column',
-  },
-  row: {
-    padding: '18px 0',
-    borderBottom: `1px solid ${colors.gray100}`,
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-    flexWrap: 'wrap',
-  },
-  rowMobile: {
-    padding: '14px 0',
-  },
-  left: {
-    minWidth: 'min(520px, 100%)',
-    flex: 1,
-  },
-  leftMobile: {
-    width: '100%',
-  },
-  leftClickable: {
-    cursor: 'pointer',
-    transition: 'opacity 0.2s ease',
-    ':active': {
-      opacity: 0.7,
-    },
-  },
-  usernameRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: spacing.xs,
-    flexWrap: 'wrap',
-  },
-  username: {
-    color: colors.primary,
-    fontSize: 16,
-    fontWeight: 600,
-  },
-  adminBadge: {
-    fontSize: 12,
-    padding: `4px ${spacing.xs}px`,
-    background: colors.gray100,
-    color: colors.gray400,
-    borderRadius: 6,
-  },
-  badges: {
-    marginTop: 10,
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  badgesMobile: {
-    flexDirection: 'column',
-    flexWrap: 'nowrap',
-    margin: '20px 0',
-  },
-  badgeMobile: {
-    width: '100%',
-    justifyContent: 'center',
-  },
-  right: {
-    display: 'flex',
-    gap: spacing.sm,
-    alignItems: 'center',
-  },
-
-  // Form Elements
-  form: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: spacing.xl,
-  },
-  label: {
-    display: 'block',
-    marginBottom: 0,
-    fontSize: 14,
-    fontWeight: 600,
-    color: colors.gray500,
-    letterSpacing: '0.025em',
-  },
-  labelRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.xs,
-  },
-  btnSmall: {
-    padding: `${spacing.xs}px ${spacing.sm}px`,
-    borderRadius: borderRadius.small,
-    fontSize: 13,
-  },
-  row2: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: spacing.md,
-    alignItems: 'end',
-  },
-  row2Mobile: {
-    gridTemplateColumns: '1fr',
-  },
-  formActions: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: spacing.sm,
-    marginTop: spacing.xs,
-  },
-  error: {
-    color: colors.errorText,
-    background: colors.errorBg,
     padding: spacing.md,
-    borderRadius: borderRadius.medium,
-    fontSize: 14,
-    fontWeight: 500,
-    whiteSpace: 'pre-wrap',
+    border: `1px solid ${colors.gray100}`,
+    transition: 'all 0.2s ease',
+    display: 'flex',
+    flexDirection: 'column',
+    cursor: 'pointer',
+    position: 'relative',
   },
+  cardHeader: { display: 'flex', alignItems: 'center', gap: spacing.md, marginBottom: spacing.md },
+  headerInfo: { flex: 1, overflow: 'hidden' },
+  usernameRow: { display: 'flex', flexDirection: 'column' },
+  userLabel: { fontWeight: 600, fontSize: 12, color: colors.gray400 },
+  adminLabel: { fontWeight: 600, fontSize: 12, color: colors.gray500 },
+  username: { fontSize: 16, fontWeight: 600, color: colors.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' },
+  infoGrid: { display: 'flex', flexDirection: 'column', gap: spacing.sm, marginBottom: spacing.md, background: colors.gray50, padding: spacing.sm, borderRadius: borderRadius.medium },
+  badges: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: spacing.xs, marginTop: 'auto' },
+  fullWidthBadge: { width: '100%', display: 'flex', justifyContent: 'center', padding: '6px 4px', boxSizing: 'border-box' },
+  label: { fontSize: 14, fontWeight: 500, color: colors.gray500, },
+  errorBox: { background: colors.errorBg, color: colors.errorText, padding: spacing.md, borderRadius: borderRadius.medium, fontSize: 13 },
 };

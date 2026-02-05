@@ -2,7 +2,7 @@
 import axios from 'axios';
 
 // ==================== CONFIG ====================
-const API_BASE_URL = '/api';
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || '/api';
 
 const ACCESS_TOKEN_KEY = 'accessToken';
 const REFRESH_TOKEN_KEY = 'refreshToken';
@@ -54,19 +54,35 @@ const tokenStorage = {
 };
 
 // ==================== ERROR NORMALIZATION ====================
-export function normalizeApiError(err) {
-  const status = err?.response?.status ?? null;
-  const data = err?.response?.data ?? null;
+export function normalizeApiError(error) {
+  if (!error.response) {
+    // Сетевая ошибка (нет интернета)
+    return 'Не удалось подключиться к серверу';
+  }
 
-  const message =
-    data?.detail ||
-    data?.message ||
-    (typeof data === 'string' ? data : null) ||
-    err?.message ||
-    'Request failed';
+  const status = error.response.status;
+  const data = error.response.data;
 
-  return { status, data, message, raw: err };
+  // Маппинг статус-кодов на человеческие сообщения
+  const statusMessages = {
+    400: 'Некорректный запрос',
+    401: 'Необходима авторизация',
+    403: 'Доступ запрещен',
+    404: 'Данные не найдены',
+    500: 'Внутренняя ошибка сервера',
+    502: 'Сервер временно недоступен',
+    503: 'Сервис недоступен. Попробуйте позже',
+  };
+
+  // Если есть сообщение от API (например data.message или data.error)
+  if (data?.message) return data.message;
+  if (data?.error) return data.error;
+  if (data?.detail) return data.detail;
+
+  // Иначе используем маппинг
+  return statusMessages[status] || 'Произошла ошибка';
 }
+
 
 // ==================== AUTH FLOW (REFRESH QUEUE) ====================
 let isRefreshing = false;
@@ -122,9 +138,10 @@ api.interceptors.response.use(
     // Только 401 интересен для refresh
     if (status !== 401) {
       if (IS_DEV) {
-        const n = normalizeApiError(error);
+        // ✅ ИСПРАВЛЕНИЕ: normalizeApiError возвращает строку, выводим её корректно
+        const errorMessage = normalizeApiError(error);
         // eslint-disable-next-line no-console
-        console.error('API error:', n.status, n.message, n.data);
+        console.error('API error:', status, errorMessage, error.response?.data);
       }
       return Promise.reject(error);
     }
@@ -217,6 +234,19 @@ export const authApi = {
   },
 };
 
+
+export const getMediaUrl = (path) => {
+  if (!path) return null;
+  if (path.startsWith('http')) return path;
+
+  // Берем baseURL из axios (например, http://domain.com/api)
+  // и убираем из него /api, чтобы получить корень сервера
+  const baseUrl = api.defaults.baseURL.replace(/\/api$/, '').replace(/\/+$/, '');
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+
+  return `${baseUrl}${cleanPath}`;
+};
+
 // ==================== GOODS API ====================
 export const goodsApi = {
   list: (config) => api.get('goods/', withConfig(config)).then((r) => r.data?.results || []),
@@ -243,7 +273,8 @@ export const imagesApi = {
 export const newslettersApi = {
   list: (config) => api.get('newsletters/', withConfig(config)).then(getData),
   detail: (id, config) => api.get(`newsletters/${id}/`, withConfig(config)).then(getData),
-  
+
+  remove: (id, config) => api.delete(`newsletters/${id}/`, withConfig(config)),
   // Создание базовой записи рассылки
   create: (data, config) => api.post('newsletters/', data, withConfig(config)).then(getData),
   
@@ -283,6 +314,8 @@ export const usersApi = {
   cleanPayments: (config) => api.post('users/clean-payments/', null, withConfig(config)).then(getData),
 };
 
+
+
 // ==================== ADMINS API ====================
 export const adminsApi = {
   list: (config) => api.get('users/', { params: { only_admins: true }, ...(config || {}) }).then(getData),
@@ -291,12 +324,6 @@ export const adminsApi = {
   update: (id, data, config) => api.put(`users/${id}/`, data, withConfig(config)).then(getData),
   partialUpdate: (id, data, config) => api.patch(`users/${id}/`, data, withConfig(config)).then(getData),
   remove: (id, config) => api.delete(`users/${id}/`, withConfig(config)),
-};
-
-// ==================== SITE API ====================
-export const siteApi = {
-  // NOTE: если API_BASE_URL = http://host/api/ -> лого: http://host/static/...
-  getLogo: () => `${API_BASE_URL.replace(/\/api\/$/, '/') }static/images/logo.png`,
 };
 
 

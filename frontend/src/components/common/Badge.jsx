@@ -18,17 +18,20 @@ export default function Badge({
       background: colors.primary || 'rgb(28, 28, 28)',
       color: '#FFF',
       border: 'none',
+      justifyContent: 'center'
     },
     inactive: {
       background: 'transparent',
       color: colors.gray400 || '#9CA3AF',
       border: `2px dashed ${colors.gray200 || '#E5E7EB'}`,
+      justifyContent: 'center'
     },
     clickable: {
       background: isHovered ? (colors.primary || '#1C1C1C') : '#F3F4F6',
       color: isHovered ? '#FFF' : (colors.primary || '#1C1C1C'),
       border: 'none',
       cursor: 'pointer',
+      justifyContent: 'center'
     },
   };
 

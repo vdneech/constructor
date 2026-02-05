@@ -11,6 +11,7 @@ import {
 
 import CreateNewsletter from './pages/Newsletters/CreateNewsletter';
 import NewslettersList from './pages/Newsletters/NewslettersList';
+// import ErrorPage from './pa/ErrorPage'
 import NewsletterDetail from './pages/Newsletters/NewsletterDetail';
 import Analytics from './pages/Analytics';
 import LoginPage from './pages/LoginPage';
@@ -24,7 +25,7 @@ import UsersList from './pages/Users/UsersList';
 import BotConfig from './pages/Bot/BotConfig';
 import BotRegistrationStepsList from './pages/Bot/BotRegistrationStepsList';
 import BotRegistrationStep from './pages/Bot/BotRegistrationStep';
-import { ConfirmModal } from './components/common';
+import {ConfirmModal, ErrorPage} from './components/common';
 import { colors, typography, spacing, borderRadius, shadows } from './styles/theme';
 
 import './App.css';
@@ -427,6 +428,7 @@ function Navigation() {
         open={isLogoutDialogOpen}
         title="Выход из аккаунта"
         message="Вы уверены, что хотите выйти из аккаунта?"
+        description="Позже придется вводить пароль снова"
         onClose={() => !loggingOut && setIsLogoutDialogOpen(false)}
         onConfirm={handleConfirmLogout}
         confirmText="Выйти"
@@ -465,24 +467,28 @@ function AppRoutes() {
       }}
     >
       <Routes>
-        <Route path="/login" element={<LoginPage />} />
+          <Route path="/login" element={<LoginPage />} />
 
-        <Route element={<ProtectedRoute />}>
-          <Route path="/" element={<Navigate to="/analytics" replace />} />
-          <Route path="/analytics" element={<Analytics />} />
-          <Route path="/newsletters/create" element={<CreateNewsletter />} />
-          <Route path="/newsletters" element={<NewslettersList />} />
-          <Route path="/newsletters/:id" element={<NewsletterDetail />} />
-          <Route path="/goods" element={<GoodsList />} />
-          <Route path="/goods/new" element={<CreateGood />} />
-          <Route path="/goods/:id" element={<GoodDetail />} />
-          <Route path="/users" element={<UsersList />} />
-          <Route path="/bot" element={<BotConfig />} />
-          <Route path="/bot/registration" element={<BotRegistrationStepsList />} />
-          <Route path="/bot/registration/new" element={<BotRegistrationStep />} />
-          <Route path="/bot/registration/:id" element={<BotRegistrationStep />} />
-        </Route>
+          <Route element={<ProtectedRoute />}>
+            <Route path="/" element={<Navigate to="/analytics" replace />} />
+            <Route path="/analytics" element={<Analytics />} />
+            <Route path="/newsletters/create" element={<CreateNewsletter />} />
+            <Route path="/newsletters" element={<NewslettersList />} />
+            <Route path="/newsletters/:id" element={<NewsletterDetail />} />
+            <Route path="/goods" element={<GoodsList />} />
+            <Route path="/goods/new" element={<CreateGood />} />
+            <Route path="/goods/:id" element={<GoodDetail />} />
+            <Route path="/users" element={<UsersList />} />
+            <Route path="/bot" element={<BotConfig />} />
+            <Route path="/bot/registration" element={<BotRegistrationStepsList />} />
+            <Route path="/bot/registration/new" element={<BotRegistrationStep />} />
+            <Route path="/bot/registration/:id" element={<BotRegistrationStep />} />
+          </Route>
+
+          {/* Catch-all для всех несуществующих роутов */}
+          <Route path="*" element={<ErrorPage code="404" />} />
       </Routes>
+
     </div>
   );
 }

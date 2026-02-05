@@ -99,6 +99,7 @@ export default function NewslettersList() {
           <EmptyStateCard 
             title="Рассылок пока нет" 
             description="Создайте свою первую рассылку для пользователей Telegram и Email"
+            style={{border: 'none', boxShadow: 'none', background: 'none'}}
             onClick={() => navigate('/newsletters/create')}
             isMobile={isMobile}
           />
@@ -121,6 +122,7 @@ export default function NewslettersList() {
             <EmptyStateCard 
               title="Новая рассылка" 
               description="Запланировать еще одну"
+              style={{border: 'none', boxShadow: 'none', background: 'none'}}
               onClick={() => navigate('/newsletters/create')}
               isMobile={isMobile}
               small

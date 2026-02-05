@@ -3,19 +3,8 @@ import React from 'react';
 import OverlayModal from './OverlayModal';
 import Button from './Button';
 import { colors, spacing } from '../../styles/theme';
+import { useIsMobile } from "../../hooks"; // Убедитесь, что путь верный
 
-/**
- * Модальное окно подтверждения деструктивного действия
- * @param {string} title - Заголовок модалки
- * @param {string} message - Основной вопрос
- * @param {string} description - Дополнительное описание (необязательно)
- * @param {function} onConfirm - Колбэк подтверждения
- * @param {function} onClose - Колбэк закрытия
- * @param {string} confirmText - Текст кнопки подтверждения
- * @param {string} cancelText - Текст кнопки отмены
- * @param {boolean} loading - Состояние загрузки
- * @param {boolean} open - Показать/скрыть
- */
 export default function ConfirmModal({
   open,
   title = 'Подтверждение',
@@ -27,6 +16,9 @@ export default function ConfirmModal({
   cancelText = 'Отмена',
   loading = false,
 }) {
+  // 1. Хук вызывается внутри компонента
+  const isMobile = useIsMobile();
+
   return (
     <OverlayModal open={open} title={title} onClose={onClose}>
       <div style={styles.message}>
@@ -39,21 +31,19 @@ export default function ConfirmModal({
         </div>
       )}
 
-      <div style={styles.actions}>
-        
-        <Button
-          variant="primary"
-          fullWidth
-          onClick={onClose}
-          disabled={loading}
-          style={styles.cancelButton}
-        >
-          {cancelText}
-        </Button>
+      {/* 2. Логику стилей пишем прямо здесь, смешивая статические стили styles.actions и динамические */}
+      <div style={{
+        ...styles.actions,
+        flexDirection: isMobile ? 'column' : 'row-reverse',
+        width: isMobile ? '100%' : 'auto',
+        justifyContent: 'space-around'
+      }}>
 
+        {/* Кнопки. На мобильном порядок будет сверху вниз (из-за column),
+            поэтому Confirm будет первой, Cancel второй. */}
         <Button
           variant="danger"
-          fullWidth
+          fullWidth={isMobile} // На ПК кнопка не должна быть на всю ширину
           onClick={onConfirm}
           loading={loading}
           loadingText="Загрузка..."
@@ -62,35 +52,42 @@ export default function ConfirmModal({
           {confirmText}
         </Button>
 
-        
+        <Button
+          fullWidth={isMobile}
+          onClick={onClose}
+          disabled={loading}
+          style={styles.cancelButton}
+        >
+          {cancelText}
+        </Button>
+
       </div>
     </OverlayModal>
   );
 }
 
+// 3. Статические стили (здесь нет isMobile)
 const styles = {
   message: {
-    color: colors.primary,
-    fontSize: 16,
-    fontWeight: 600, // ← ИСПРАВЛЕНО: было 550
-    marginBottom: spacing.sm,
-    textAlign: 'center',
+    color: colors.white,
+    fontSize: 15,
+    fontWeight: 500,
   },
   description: {
     color: colors.gray500,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: 500,
     marginBottom: spacing.md,
-    textAlign: 'center',
     lineHeight: 1.5,
   },
   actions: {
     display: 'flex',
-    flexDirection: 'column',
     gap: spacing.sm,
-    marginTop: spacing.xs,
+    marginTop: spacing.xxxl,
   },
   cancelButton: {
+    boxShadow: 'none',
+    background: 'none',
     fontSize: 16,
   },
   confirmButton: {

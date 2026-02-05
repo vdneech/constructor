@@ -1,15 +1,14 @@
-// pages/GoodsList.jsx
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { goodsApi } from '../../services/api';
-import { 
-  Spinner,
+
+import {
   PageHeader,
   EmptyStateCard,
-  ErrorPage // Добавили наш новый компонент
 } from '../../components/common';
-import { useIsMobile } from '../../hooks';
-import { parseApiError } from '../../utils';
+
+import { useIsMobile, usePageData } from '../../hooks';
+import PageLayout from '../../components/PageLayout';
 import { pageStyles } from '../../styles/pageStyles';
 import { colors, spacing, borderRadius, shadows } from '../../styles/theme';
 
@@ -17,27 +16,16 @@ export default function GoodsList() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
 
-  const [goods, setGoods] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null); // Теперь храним строку ошибки здесь
 
-  useEffect(() => {
-    loadGoods();
-  }, []);
 
-  const loadGoods = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await goodsApi.list();
-      const data = response?.results || response || [];
-      setGoods(Array.isArray(data) ? data : []);
-    } catch (e) {
-      setError(parseApiError(e));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+
+  const { data, loading, error, retry } = usePageData(
+    () => goodsApi.list(),
+    []
+  );
+
+  const goods = Array.isArray(data) ? data : (data?.results || []);
+
 
   const getMainPhoto = useCallback((good) => {
     if (!good?.images?.length) return null;
@@ -45,57 +33,51 @@ export default function GoodsList() {
     return invoicePhoto ? invoicePhoto.image : good.images[0].image;
   }, []);
 
-  // Если поймали ошибку загрузки — показываем ErrorPage
-  if (error) {
-    return <ErrorPage code="500"/>;
-  }
 
-  if (loading) {
-    return (
-      <div style={styles.center}>
-        <Spinner size={40} />
-      </div>
-    );
-  }
+
+
 
   return (
-    <div style={pageStyles.page}>
-      <div style={pageStyles.container}>
-        <PageHeader
-          title="Товары"
-          subtitle="Активные товары отобразятся в боте и будут доступны для покупки."
-          isMobile={isMobile}
-        />
-
-        {goods.length === 0 ? (
-          <EmptyStateCard
-            title="Добавить товар"
-            description="Создайте новый товар для вашего каталога"
-            onClick={() => navigate('/goods/new')}
+    <PageLayout loading={loading} error={error} onRetry={retry}>
+      <div style={pageStyles.page}>
+        <div style={pageStyles.container}>
+          <PageHeader
+            title="Товары"
+            subtitle="Активные товары отобразятся в боте и будут доступны для покупки."
             isMobile={isMobile}
           />
-        ) : (
-          <div style={{ ...styles.grid, ...(isMobile && styles.gridMobile) }}>
-            {goods.map((good) => (
-              <GoodCard
-                key={good.id}
-                good={good}
-                mainPhoto={getMainPhoto(good)}
-                isMobile={isMobile}
-                onClick={() => navigate(`/goods/${good.id}`)}
-              />
-            ))}
 
+          {goods.length === 0 ? (
             <EmptyStateCard
               title="Добавить товар"
-              description="Создайте еще один товар"
+              description="Создайте новый товар для вашего каталога"
               onClick={() => navigate('/goods/new')}
               isMobile={isMobile}
             />
-          </div>
-        )}
+          ) : (
+            <div style={{ ...styles.grid, ...(isMobile && styles.gridMobile) }}>
+              {goods.map((good) => (
+                <GoodCard
+                  key={good.id}
+                  good={good}
+                  mainPhoto={getMainPhoto(good)}
+                  isMobile={isMobile}
+                  onClick={() => navigate(`/goods/${good.id}`)}
+                />
+              ))}
+
+              <EmptyStateCard
+                title="Добавить товар"
+                style={{border: 'none', boxShadow: 'none', background: 'none'}}
+                description="Создайте еще один товар"
+                onClick={() => navigate('/goods/new')}
+                isMobile={isMobile}
+              />
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </PageLayout>
   );
 }
 
@@ -200,7 +182,7 @@ const styles = {
     height: '100%'
   },
   goodCardMobile: { borderRadius: borderRadius.cardMobile },
-  goodPhoto: { width: '100%', height: 200, background: colors.gray100, display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  goodPhoto: { width: '100%', height: 300, background: colors.gray100, display: 'flex', alignItems: 'center', justifyContent: 'center' },
   goodPhotoMobile: { height: 300 },
   noPhoto: { padding: spacing.md, border: `1px dashed ${colors.gray300}`, borderRadius: borderRadius.medium },
   noPhotoText: { fontSize: 12, color: colors.gray400, fontWeight: 600 },

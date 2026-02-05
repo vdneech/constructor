@@ -227,8 +227,7 @@ export default function BotRegistrationStep() {
             value={form.message_text}
             onChange={setField('message_text')}
             rows={6}
-            placeholder="Введите текст вопроса. Можно использовать теги <b><b>, <i><i>, <code>code</code>, <a href='...'>link</a>"
-            hint="Поддерживаются HTML-теги"
+            placeholder="Введите ваше имя"
           />
 
           <HTMLTextarea
@@ -236,8 +235,8 @@ export default function BotRegistrationStep() {
             value={form.error_message}
             onChange={setField('error_message')}
             rows={4}
-            placeholder="HTML-теги также работают..."
-            hint="Будет отправлено пользователю, если данные некорректны - например, вместо телефона пришёл текст"
+            placeholder="Имя должно состоять из имени и фамилии!"
+            hint="Будет отправлено пользователю, если данные некорректны — например, вместо телефона пришёл текст"
           />
 
           <Button

@@ -149,6 +149,7 @@ export default function CreateNewsletter() {
                 error={errors.channel?.[0]}
                 onChange={handleChange('channel')}
                 options={CHANNEL_OPTIONS}
+                hint={"Выберите, куда отправить письмо"}
               />
             </div>
 
@@ -226,13 +227,14 @@ export default function CreateNewsletter() {
                 value={form.scheduled_at}
                 onChange={handleChange('scheduled_at')}
                 hint="Оставьте пустым для мгновенной отправки"
+                style={{display: 'block'}}
               />
               <div style={{ alignSelf: 'center', paddingTop: isMobile ? 0 : spacing.sm }}>
                 <Checkbox
                   checked={form.only_paid}
                   onChange={() => setForm((prev) => ({ ...prev, only_paid: !prev.only_paid }))}
                   title="Только платящим"
-                  description="Рассылка для тех, кто завершил оплату"
+                  description="Рассылка отправится тем, кто совершил оплату"
                 />
               </div>
             </div>

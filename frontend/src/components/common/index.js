@@ -17,6 +17,5 @@ export { default as IconButton } from './IconButton';
 export { default as PageHeader } from './PageHeader';
 export { default as EmptyStateCard } from './EmptyStateCard';
 export { default as ErrorPage } from './ErrorPage';
-export { default as NetworkErrorPage } from './NetworkErrorPage';
 
 export * from './Icons';

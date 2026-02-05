@@ -1,15 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { registrationStepsApi } from '../../services/api';
 import {
   NoticeModal,
-  Spinner,
   PageHeader,
   Button,
 } from '../../components/common';
-import { useIsMobile } from '../../hooks'; // Добавляем хук
+import PageLayout from '../../components/PageLayout';
+import { useIsMobile, usePageData } from '../../hooks';
 import { parseApiError } from '../../utils';
-import { pageStyles } from '../../styles/pageStyles'; // Импортируем системные стили
+import { pageStyles } from '../../styles/pageStyles';
 import { colors, spacing, borderRadius, shadows } from '../../styles/theme';
 
 const ArrowIcon = ({ direction = 'up' }) => (
@@ -21,25 +21,26 @@ const ArrowIcon = ({ direction = 'up' }) => (
 export default function BotRegistrationStepsList() {
   const navigate = useNavigate();
   const isMobile = useIsMobile(); // Определяем мобилку
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+
   const [reorderState, setReorderState] = useState('idle');
   const [notice, setNotice] = useState({ open: false, type: 'success', text: '' });
 
-  const loadSteps = useCallback(async () => {
-    try {
-      setLoading(true);
-      const data = await registrationStepsApi.list();
+
+
+  const { data, loading, error, retry } = usePageData(
+    () => registrationStepsApi.list(),
+    []
+  );
+
+  const [items, setItems] = useState([]);
+
+  useEffect(() => {
+    if (data) {
       const list = Array.isArray(data) ? data : data?.results || [];
       setItems([...list].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
-    } catch (e) {
-      setNotice({ open: true, type: 'error', text: parseApiError(e) });
-    } finally {
-      setLoading(false);
     }
-  }, []);
+  }, [data]);
 
-  useEffect(() => { loadSteps(); }, [loadSteps]);
 
   const moveStep = (e, index, direction) => {
     e.stopPropagation();
@@ -64,87 +65,88 @@ export default function BotRegistrationStepsList() {
     }
   };
 
-  if (loading) return <div style={styles.center}><Spinner size={40} /></div>;
 
   return (
-    <div style={pageStyles.page}>
-      <div style={pageStyles.container}>
-        <PageHeader 
-          title="Регистрация" 
-          subtitle="Настройка последовательности вопросов бота"
-          isMobile={isMobile}
-        />
+    <PageLayout loading={loading} error={error} onRetry={retry}>
+      <div style={pageStyles.page}>
+        <div style={pageStyles.container}>
+          <PageHeader
+            title="Регистрация"
+            subtitle="Настройка последовательности вопросов бота"
+            isMobile={isMobile}
+          />
 
-        <div style={styles.list}>
-          {/* Кастомный Create Card (в стиле пустых карточек из Config) */}
-          <div 
-            style={{...styles.createCard, ...(isMobile && styles.createCardMobile)}} 
-            onClick={() => navigate('/bot/registration/new')}
-          >
-            
-            <div style={styles.createTextContainer}>
-              <h3 style={styles.createTitle}>Добавить новый шаг</h3>
-              <p style={styles.createSub}>Нажмите, чтобы создать новый вопрос для пользователя</p>
+          <div style={styles.list}>
+            {/* Кастомный Create Card (в стиле пустых карточек из Config) */}
+            <div
+              style={{...styles.createCard, ...(isMobile && styles.createCardMobile)}}
+              onClick={() => navigate('/bot/registration/new')}
+            >
+
+              <div style={styles.createTextContainer}>
+                <h3 style={styles.createTitle}>Добавить новый шаг</h3>
+                <p style={styles.createSub}>Нажмите, чтобы создать новый вопрос для пользователя</p>
+              </div>
             </div>
+
+            {items.map((item, index) => (
+              <div key={item.id} style={{...styles.item, ...(isMobile && styles.itemMobile)}}>
+                <div style={styles.controls}>
+                  <button
+                    style={{ ...styles.moveBtn, visibility: index === 0 ? 'hidden' : 'visible' }}
+                    onClick={(e) => moveStep(e, index, 'up')}
+                  >
+                    <ArrowIcon direction="up" />
+                  </button>
+                  <div style={styles.orderLabel}>{index + 1}</div>
+                  <button
+                    style={{ ...styles.moveBtn, visibility: index === items.length - 1 ? 'hidden' : 'visible' }}
+                    onClick={(e) => moveStep(e, index, 'down')}
+                  >
+                    <ArrowIcon direction="down" />
+                  </button>
+                </div>
+
+                <div style={styles.content} onClick={() => navigate(`/bot/registration/${item.id}`)}>
+                  <div style={styles.cardHeader}>
+                    <span style={styles.stepType}>
+                      {item.field_type === 'text' ? 'Свой вопрос' : 'Системное поле'}
+                    </span>
+                  </div>
+                  <h3 style={styles.title}>{item.field_name || 'Текстовое поле'}</h3>
+                  <p style={styles.preview}>
+                    {item.message_text.replace(/<[^>]*>/g, '').substring(0, 70)}...
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
 
-          {items.map((item, index) => (
-            <div key={item.id} style={{...styles.item, ...(isMobile && styles.itemMobile)}}>
-              <div style={styles.controls}>
-                <button 
-                  style={{ ...styles.moveBtn, visibility: index === 0 ? 'hidden' : 'visible' }} 
-                  onClick={(e) => moveStep(e, index, 'up')}
-                >
-                  <ArrowIcon direction="up" />
-                </button>
-                <div style={styles.orderLabel}>{index + 1}</div>
-                <button 
-                  style={{ ...styles.moveBtn, visibility: index === items.length - 1 ? 'hidden' : 'visible' }} 
-                  onClick={(e) => moveStep(e, index, 'down')}
-                >
-                  <ArrowIcon direction="down" />
-                </button>
-              </div>
+          {/* Футер с кнопкой сохранения - теперь он выровнен по ширине контейнера */}
+          {reorderState !== 'idle' && (
+              <Button
+                variant="primary"
+                fullWidth
+                style={{marginTop: spacing.md}}
+                loading={reorderState === 'saving'}
+                loadingText="Сохранение..."
+                onClick={handleSaveOrder}
+              >
+                Сохранить порядок шагов
+              </Button>
 
-              <div style={styles.content} onClick={() => navigate(`/bot/registration/${item.id}`)}>
-                <div style={styles.cardHeader}>
-                  <span style={styles.stepType}>
-                    {item.field_type === 'text' ? 'Свой вопрос' : 'Системное поле'}
-                  </span>
-                </div>
-                <h3 style={styles.title}>{item.field_name || 'Текстовое поле'}</h3>
-                <p style={styles.preview}>
-                  {item.message_text.replace(/<[^>]*>/g, '').substring(0, 70)}...
-                </p>
-              </div>
-            </div>
-          ))}
+          )}
         </div>
 
-        {/* Футер с кнопкой сохранения - теперь он выровнен по ширине контейнера */}
-        {reorderState !== 'idle' && (
-            <Button
-              variant="primary"
-              fullWidth
-              style={{marginTop: spacing.md}}
-              loading={reorderState === 'saving'}
-              loadingText="Сохранение..."
-              onClick={handleSaveOrder}
-            >
-              Сохранить порядок шагов
-            </Button>
-
-        )}
+        <NoticeModal
+          title="Регистрация"
+          open={notice.open}
+          type={notice.type}
+          text={notice.text}
+          onClose={() => setNotice(prev => ({ ...prev, open: false }))}
+        />
       </div>
-
-      <NoticeModal
-        title="Регистрация"
-        open={notice.open} 
-        type={notice.type} 
-        text={notice.text} 
-        onClose={() => setNotice(prev => ({ ...prev, open: false }))} 
-      />
-    </div>
+    </PageLayout>
   );
 }
 
