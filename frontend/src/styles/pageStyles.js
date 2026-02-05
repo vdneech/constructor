@@ -9,7 +9,7 @@ export const pageStyles = {
     minHeight: '100vh',
     background: colors.background,
     fontFamily: typography.fontFamily,
-    padding: `100px ${spacing.lg}px 0`,
+    padding: `50px ${spacing.lg}px 0`,
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'flex-start',

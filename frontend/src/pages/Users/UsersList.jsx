@@ -447,9 +447,9 @@ function UserCard({ user, isMobile, onEdit }) {
         </div>
         <div style={styles.headerInfo}>
           <div style={styles.usernameRow}>
-            <span style={styles.username} title={user.username}>@{user.username || 'Без имени'}</span>
+            <span style={styles.username} title={user.username}>{ user.first_name || 'Гость'} {user.last_name}</span>
             {user.is_superuser && <label style={styles.adminLabel} htmlFor="">Администратор</label>}
-            <label style={styles.userLabel} htmlFor="">Нажмите, чтобы редактировать</label>
+            <label style={styles.userLabel} htmlFor="">@{user.username || 'unknown'}</label>
           </div>
         </div>
       </div>
