@@ -32,14 +32,13 @@ def _handle_registration_payment(user, chat_id):
     logger.info(f"User {user.id} paid for registration")
 
 
-def _handle_good_payment(chat_id, payload):
+def _handle_good_payment(chat_id: int, payload: str) -> None:
     """Логика после оплаты конкретного товара"""
     try:
 
-        good_id = int(payload.split('_')[1])
+        good_id = int(payload)
         good = Good.objects.get(id=good_id)
 
-        # Уменьшаем остаток на складе
         if good.quantity > 0:
             good.quantity -= 1
             good.save(update_fields=['quantity'])
@@ -56,7 +55,7 @@ def _handle_good_payment(chat_id, payload):
 
 # --- Основные функции инвойсов ---
 
-def send_invoice(message):
+def send_invoice(message: types.Message) -> None:
     config = Configuration.objects.get_config()
     price_amount = int(config.price * 100)
 

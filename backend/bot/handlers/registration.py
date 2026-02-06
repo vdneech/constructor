@@ -86,15 +86,25 @@ def registration_message_handler(message: types.Message):
             message
         )
     else:
+
+        markup = generate_phone_markup(user.registration_step)
+
         bot.send_message(
             message.chat.id,
             user.registration_step.message_text,
-            parse_mode='HTML'
+            parse_mode='HTML',
+            reply_markup=markup
         )
 
 
+def generate_phone_markup(registration_step: RegistrationStep):
 
-
+    if registration_step.field_type == 'phone':
+        logger.info("YES")
+        markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+        markup.add(types.KeyboardButton(text='Отправить номер', request_contact=True))
+        return markup
+    return None
 
 def check_date(config) -> bool:
     if not config.end_of_registration:
@@ -172,8 +182,11 @@ def registration_entry(call: types.CallbackQuery):
     user.registration_step = registration_step
     user.save(update_fields=['registration_step', ])
 
+    markup = generate_phone_markup(user.registration_step)
     bot.send_message(
         chat_id=call.message.chat.id,
         text=registration_step.message_text,
-        parse_mode='HTML'
+        parse_mode='HTML',
+        reply_markup=markup
     )
+

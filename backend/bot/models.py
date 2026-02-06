@@ -16,7 +16,7 @@ class ConfigurationManager(models.Manager):
 
     _cache = None
 
-    def get_config(self):
+    def get_config(self) -> 'Configuration':
         """Возвращает единственную конфигурацию (кеширует)"""
         return self.first()
 

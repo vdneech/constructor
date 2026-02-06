@@ -11,7 +11,8 @@ from users.models import User
 
 
 @bot.message_handler(commands=['start'])
-def start_handler(message, interrupt: bool = False):
+def start_handler(message) -> types.Message:
+    '''Получает команду /start, отправляет приветственное сообщение с callback-кнопками'''
 
     config = Configuration.objects.get_config()
 

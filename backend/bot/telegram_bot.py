@@ -7,6 +7,7 @@ from dotenv import load_dotenv, find_dotenv
 from telebot import apihelper
 
 
+
 load_dotenv(find_dotenv())
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
@@ -18,12 +19,12 @@ bot = telebot.TeleBot(BOT_TOKEN)
 
 logger = logging.getLogger(__name__)
 
-from bot.handlers import registration, invoices, start, goods, ceo, format
 
 
 def run_bot():
     """Запустить бота"""
     try:
+        from bot import handlers
         logger.info('Bot is succesfully launched!')
         bot.infinity_polling(20)
     except KeyboardInterrupt:
