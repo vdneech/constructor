@@ -212,12 +212,12 @@ export default function BotRegistrationStep() {
 
           {showFieldName && (
             <Input
-              label="Название переменной"
+              label="Название поля"
               required
               value={form.field_name}
               onChange={setField('field_name')}
-              placeholder="например: has_cat"
-              hint="Латиницей, без пробелов. Сохраняется как настраиваемое поле пользователя (extras), к которому можно потом обратиться в рассылках через <b>{has_cat}</b>"
+              placeholder="Возраст"
+              hint="Это название будет отображаться в табличке как заголовок столбца"
             />
           )}
 
