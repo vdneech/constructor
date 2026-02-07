@@ -6,4 +6,6 @@ class BotConfig(AppConfig):
     name = 'bot'
 
     def ready(self):
+        import bot.handlers
+
         import bot.signals
