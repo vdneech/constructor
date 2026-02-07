@@ -28,17 +28,6 @@ def _get_friendly_error(error_exception):
 
     return f"Ошибка Telegram: {str(error_exception)}"
 
-def _update_telegram_file_ids(newsletter, sent_msgs):
-    images = newsletter.images.all()
-    for i, img in enumerate(images):
-        if not img.telegram_file_id and i < len(sent_msgs):
-            try:
-                # Берем file_id последнего (самого большого) фото из ответа TG
-                new_id = sent_msgs[i].photo[-1].file_id
-                img.telegram_file_id = new_id
-                img.save(update_fields=['telegram_file_id'])
-            except (IndexError, AttributeError):
-                continue
 
 
 def _finalize_individual_task(task, channels_sent, errors):
@@ -65,7 +54,11 @@ def send_newsletter_task(self, newsletter_id):
 
 
         # Фильтруем получателей
-        recipients = User.objects.filter(paid=newsletter.only_paid, is_superuser=False)
+        recipients = User.objects.filter(is_superuser=False)
+
+        if newsletter.only_paid:
+            recipients = recipients.filter(is_paid=True)
+
         user_ids = list(recipients.values_list('id', flat=True))
 
         if not user_ids:
@@ -92,18 +85,21 @@ def send_newsletter_task(self, newsletter_id):
 
 @shared_task(bind=True, max_retries=2)
 def send_message_to_user(self, newsletter_id, user_id):
-    from bot.telegram_bot import bot  # Импорт внутри для избежания циклической зависимости
+    from bot.bot import bot  # Импорт внутри для избежания циклической зависимости
 
     try:
         # Достаем объекты из базы внутри воркера
         newsletter = Newsletter.objects.prefetch_related('images').get(pk=newsletter_id)
-        user = User.objects.get(pk=user_id)
+        user = User.objects.get(pk=user_id, is_superuser=False)
 
         task, created = NewsletterTask.objects.get_or_create(
             newsletter=newsletter,
             user=user,
             defaults={'status': 'pending'}
         )
+
+        if user.is_superuser:
+            return
 
         if task.status == 'sent':
             return "Already sent"
@@ -140,37 +136,14 @@ def send_message_to_user(self, newsletter_id, user_id):
             except Exception as e:
                 errors.append(f"Email error: {str(e)}")
 
-        # --- Telegram ---
         if can_tg:
-            opened_files = []
             try:
-                media_group = []
-                # Используем prefetch_related картинки
-                for img in newsletter.images.all():
-                    if img.telegram_file_id:
-                        media_group.append(types.InputMediaPhoto(img.telegram_file_id))
-                    else:
-                        f = open(img.image.path, 'rb')
-                        opened_files.append(f)
-                        media_group.append(types.InputMediaPhoto(f))
-
-                full_text = f"<b>{newsletter.title}</b>\n\n{newsletter.message}"
-
-                if media_group:
-                    media_group[0].caption = full_text
-                    media_group[0].parse_mode = 'HTML'
-                    sent_msgs = bot.send_media_group(user.telegram_chat_id, media_group, timeout=60)
-                    # Кэшируем file_id, чтобы не заливать файлы заново для следующего юзера
-                    _update_telegram_file_ids(newsletter, sent_msgs)
-                else:
-                    bot.send_message(user.telegram_chat_id, full_text, parse_mode='HTML')
-
+                bot.send_cached_media_group(chat_id=user.telegram_chat_id, queryset_of_images=newsletter.images.all())
+                bot.send_message(user.telegram_chat_id, text=newsletter.message, parse_mode='HTML')
                 channels_sent.append('telegram')
             except Exception as e:
-                error = _get_friendly_error(e)
-                errors.append(error)
-            finally:
-                for f in opened_files: f.close()
+                errors.append(f"Telegram error: {str(e)}")
+
 
         _finalize_individual_task(task, channels_sent, errors)
 

@@ -1,4 +1,3 @@
-# signals.py
 import os
 from django.db.models.signals import post_delete, pre_save
 from django.dispatch import receiver
@@ -15,7 +14,6 @@ def config_delete_old_file_on_change(sender, instance, **kwargs):
     except Configuration.DoesNotExist:
         return
 
-    # Если путь к старому файлу существует и он отличается от нового
     if old_instance.invoice_image and instance.invoice_image != old_instance.invoice_image:
         if os.path.isfile(old_instance.invoice_image.path):
             os.remove(old_instance.invoice_image.path)

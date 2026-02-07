@@ -1,5 +1,5 @@
 from bot.models import Configuration
-from bot.telegram_bot import bot
+from bot.bot import bot
 from telebot import types
 
 _DATA = [

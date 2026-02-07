@@ -8,7 +8,7 @@ from rest_framework.exceptions import APIException
 from django.conf import settings
 
 from bot.models import Configuration
-from bot.telegram_bot import bot
+from bot.bot import bot
 from config.settings import BASE_URL
 from users.models import User
 from goods.models import Good  # Импортируем товары
@@ -105,7 +105,7 @@ def checkout(pre_checkout_query):
     config = Configuration.objects.get_config()
 
 
-    if payload.startswith('good_'):
+    if payload.isdigit():
         try:
             good_id = int(payload.split('_')[1])
             good = Good.objects.get(id=good_id)

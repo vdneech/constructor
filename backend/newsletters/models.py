@@ -1,6 +1,6 @@
 from django.core.exceptions import ValidationError
 from django.db import models
-
+from config.models import BaseImage
 from users.models import User
 
 
@@ -61,25 +61,6 @@ class Newsletter(models.Model):
     def __str__(self):
         return f"{self.title}"
 
-    # @property
-    # def success_rate(self):
-    #     """Процент успешных отправок"""
-    #     if self.total_recipients == 0:
-    #         return 0
-    #     return round((int(self.sent_count) / int(self.total_recipients)) * 100, 1) Убрал, потому что поле вычисляемое
-
-    # def get_recipients(self):
-    #     recipients = User.objects.all()
-    #     if self.channel == 'telegram':
-    #         recipients = recipients.filter(telegram_chat_id__isnull=False)
-    #     elif self.channel == 'email':
-    #         recipients = recipients.filter(email__isnull=False)
-    #     elif self.channel == 'both':
-    #         recipients = recipients.filter(email__isnull=False, telegram_chat_id__isnull=False)
-    #     return recipients
-
-    #     Убрал, потому что есть связанная модель NewsletterTask, у которой есть user, то бишь recipient.
-
 
 
 class NewsletterTask(models.Model):
@@ -139,7 +120,7 @@ class NewsletterTask(models.Model):
     def __str__(self):
         return f"{self.newsletter.title} -> {self.user.username} ({self.get_status_display()})"
 
-class NewsletterImage(models.Model):
+class NewsletterImage(BaseImage):
     image = models.ImageField(
         null=True,
         upload_to='newsletters/',
@@ -150,7 +131,7 @@ class NewsletterImage(models.Model):
         related_name='images',
         on_delete=models.CASCADE,
     )
-    telegram_file_id = models.CharField(max_length=255, null=True, blank=True)
+
 
     def clean(self):
         if not self.pk and self.newsletter.images.count() >= 2:

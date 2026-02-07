@@ -4,7 +4,7 @@ import pytz
 from telebot import types
 
 from bot.models import Configuration
-from bot.telegram_bot import bot
+from bot.bot import bot
 from users.models import User
 
 

@@ -8,7 +8,7 @@ from django.db.models import QuerySet
 from django.utils import timezone
 
 from bot.handlers.invoices import send_invoice
-from bot.telegram_bot import bot
+from bot.bot import bot
 from users.models import User
 from telebot import types
 from bot.models import RegistrationStep, Configuration
@@ -17,9 +17,6 @@ from django.db import transaction
 
 
 logger = logging.getLogger(__name__)
-MOSCOW_TZ = pytz.timezone('Europe/Moscow')
-
-
 
 
 
@@ -54,7 +51,6 @@ def registration_message_handler(message: types.Message):
     )
     step = user.registration_step
 
-    # на всякий случай (если данные в БД съехали)
     if user.is_registered or step is None:
         bot.send_message(message.chat.id, "Регистрация уже завершена.")
         return
@@ -66,7 +62,6 @@ def registration_message_handler(message: types.Message):
         bot.send_message(message.chat.id, validated_or_error, parse_mode='HTML')
         return
 
-    # сохраняем значение + двигаем шаг атомарно
     with transaction.atomic():
         step.save_to_user(user, validated_or_error)
 

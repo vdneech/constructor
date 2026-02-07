@@ -85,11 +85,12 @@ CORS_ALLOW_CREDENTIALS = False
 # --- Безопасность / базовые опции ---
 
 SECRET_KEY = os.environ.get('SECRET_KEY')
-DEBUG = False
+DEBUG = True
 
 ALLOWED_HOSTS = [
     'guest-seasons.tech',
     'www.guest-seasons.tech',
+    '127.0.0.1',
     'localhost'
 ]
 

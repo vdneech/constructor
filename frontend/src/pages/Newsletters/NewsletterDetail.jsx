@@ -362,7 +362,12 @@ const styles = {
   tablesSection: { display: 'flex', flexDirection: 'column', gap: spacing.xl },
   tableContainer: { },
   tableTitle: { fontSize: '14px', fontWeight: 800, color: colors.primary, textTransform: 'uppercase', marginBottom: spacing.md, textAlign: 'center' },
-  tableWrapper: { background: colors.white, borderRadius: borderRadius.card, border: `1px solid ${colors.gray100}`, overflow: 'hidden' },
+  tableWrapper: {
+    background: colors.white,
+    borderRadius: borderRadius.card,
+    border: `1px solid ${colors.gray100}`,
+    overflow: 'visible' //
+},
   table: { width: '100%', borderCollapse: 'collapse' },
   th: { padding: '12px 20px', background: colors.gray50, color: colors.gray500, fontSize: '10px', fontWeight: 800, textTransform: 'uppercase' },
   tr: { borderBottom: `1px solid ${colors.gray50}` },

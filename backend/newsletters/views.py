@@ -60,16 +60,6 @@ class NewsletterViewSet(UploadImageMixin, viewsets.ModelViewSet):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    # @action(detail=True, methods=['post'], url_path='upload-image')
-    # def upload_image(self, request, pk=None):
-    #     serializer = NewsletterImageSerializer(data=request.data)
-    #     newsletter = self.get_object()
-    #     if serializer.is_valid():
-    #
-    #         serializer.save(newsletter=newsletter)
-    #         return Response(serializer.data, status=status.HTTP_201_CREATED)
-    #     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
     @action(detail=False, methods=['get'], url_path='progress')
     def progress(self, request):
         newsletters = Newsletter.objects.all()

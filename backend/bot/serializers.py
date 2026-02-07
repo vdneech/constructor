@@ -63,17 +63,3 @@ class RegistrationStepReorderSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     order = serializers.IntegerField(min_value=1)
 
-
-class TelegramMessageSerializer(serializers.Serializer):
-    text = serializers.CharField(
-        max_length=4096,
-        required=True,
-        min_length=1,
-    )
-
-    def validate(self, data):
-        if data['text'].isspace():
-            raise serializers.ValidationError(
-                'Text must not be blank'
-            )
-        return data

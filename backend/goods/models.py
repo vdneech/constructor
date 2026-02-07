@@ -3,7 +3,7 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models
 from goods.provider import generate_provider_data
 from users.models import User
-
+from config.models import BaseImage
 
 class Good(models.Model):
     class Meta:
@@ -48,7 +48,7 @@ class Good(models.Model):
         return generate_provider_data(self)
 
 
-class GoodImage(models.Model):
+class GoodImage(BaseImage):
     class Meta:
         verbose_name = "Фото товара"
         verbose_name_plural = "Фотографии товара"
@@ -58,7 +58,6 @@ class GoodImage(models.Model):
     is_invoice = models.BooleanField(default=False,
                                      verbose_name="Фото в оплате",
                                      help_text="Если ни одно не отмечено, используется первое из предоставленных")
-    telegram_file_id = models.CharField(max_length=255, null=True, blank=True)
 
     def clean(self):
         if not self.pk and self.good.images.count() >= 3:

@@ -8,7 +8,7 @@ from ...models import Configuration
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
 
-from ...telegram_bot import run_bot
+from ...bot import run_bot
 
 logger = logging.getLogger(__name__)
 

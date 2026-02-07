@@ -17,6 +17,16 @@ def goodimage_delete_old_file_on_change(sender, instance: GoodImage, **kwargs):
         old.image.delete(save=False)
 
 @receiver(post_delete, sender=GoodImage)
-def goodimage_delete_file_on_delete(sender, instance: GoodImage, **kwargs):
-    if instance.image:
-        instance.image.delete(save=False)
+def delete_physical_file(sender, instance, **kwargs):
+    """Удаляет файл с диска, если он больше не используется в базе."""
+
+    if not instance.image or not instance.image.name:
+        return
+
+    file_path = instance.image.name
+    still_used = sender.objects.filter(image=file_path).exists()
+
+    if not still_used:
+        storage = instance.image.storage
+        if storage.exists(file_path):
+            storage.delete(file_path)
