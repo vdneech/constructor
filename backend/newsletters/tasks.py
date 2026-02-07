@@ -57,7 +57,7 @@ def send_newsletter_task(self, newsletter_id):
         recipients = User.objects.filter(is_superuser=False)
 
         if newsletter.only_paid:
-            recipients = recipients.filter(is_paid=True)
+            recipients = recipients.filter(paid=True)
 
         user_ids = list(recipients.values_list('id', flat=True))
 
